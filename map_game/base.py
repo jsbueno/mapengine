@@ -91,7 +91,7 @@ class Palette(object):
 
 class Scene(object):
     mapscale = 64
-    scene_path_prefix = "./"
+    scene_path_prefix = "scenes/"
     out_of_map = Color(0,0,0)
 
     def __init__(self, mapfile, mapdescription, **kw):
