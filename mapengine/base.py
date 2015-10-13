@@ -121,6 +121,7 @@ class Scene(object):
         self.mapfile = scene_name + ".png"
         self.mapdescription = scene_name + ".gpl"
         self.load()
+        self.tiles = {}
 
         # TODO: factor this out to a mixin "autoattr" class
         for line in self.__class__.attributes.split("\n"):
@@ -158,7 +159,25 @@ class Scene(object):
         except IndexError:
             return self.out_of_map
         # TODO: load scene block images
-        return color
+        try:
+            name = self.palette[color]
+        except KeyError:
+            return color
+        try:
+            return self.tiles[name]
+        except KeyError:
+            pass
+
+        try:
+            img = pygame.image.load(self.scene_path_prefix + name + ".png")
+        except (pygame.error, IOError):
+            self.tiles[name] = color
+        else:
+            if img.get_width() != self.blocksize:
+                ratio = float(self.blocksize) / img.get_width()
+                img = pygame.transform.rotozoom(img, 0, ratio)
+            self.tiles[name] = img
+        return self.tiles[name]
 
     def move(self, direction):
         self.target_left += direction[0]

@@ -2,6 +2,7 @@ GIMP Palette
 Name: scene0
 Columns: 1
 #
-  0 255   0	grama
-  0   0   0	parede
-  0  42 255	agua
+  0 255   0	grass
+  0   0   0 brick
+  0  42 255	water
+143  11  11	wood
