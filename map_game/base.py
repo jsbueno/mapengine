@@ -5,9 +5,14 @@ from pygame.color import Color
 
 SIZE = 800, 600
 
+
+class Directions(object):
+    # TODO: create some simple const type with a nice REPR
+    RIGHT, LEFT, UP, DOWN = (1, 0), (-1, 0), (0, -1), (0, 1)
+
+
 class GameOver(Exception):
     pass
-
 
 
 class Controller(object):
@@ -25,15 +30,15 @@ class Controller(object):
 
     def background(self):
         scene = self.scene
-        scale = scene.mapscale
-        blocks_x = self.width / scale
-        blocks_y = self.width / scale
+        scale = scene.blocksize
+        blocks_x = self.width // scale
+        blocks_y = self.width // scale
         for x in range(blocks_x):
             for y in range(blocks_y):
-                image = scene[x + scene.left,y + scene.top]
+                image = scene[x + scene.left, y + scene.top]
                 if isinstance(image, Color):
                     pygame.draw.rect(self.screen, image, (x * scale, y * scale, scale, scale))
-                else: # image
+                else:  # image
                     self.screen.blit(image, (x * scale, y * scale))
 
     def quit(self):
@@ -90,20 +95,62 @@ class Palette(object):
 
 
 class Scene(object):
-    mapscale = 64
     scene_path_prefix = "scenes/"
-    out_of_map = Color(0,0,0)
+    out_of_map = Color(0, 0, 0)
+    attributes = """
+    top 0
+    left 0
+    target_top self.top
+    target_left self.left
+    margin 3
+    h_margin self.margin
+    v_margin self.margin
 
-    def __init__(self, mapfile, mapdescription, **kw):
-        self.top = 0
-        self.left = 0
-        self.mapfile = mapfile
-        self.mapdescription = mapdescription
+    display_size None
+    window_width 16
+    window_height 12
+
+    scroll_rate 8
+
+    out_of_map self.out_of_map
+
+    """
+
+    def __init__(self, scene_name, **kw):
+        # FIXME: allow different extensions, attempt to file-name case sensitiveness
+        self.mapfile = scene_name + ".png"
+        self.mapdescription = scene_name + ".gpl"
         self.load()
+
+        # TODO: factor this out to a mixin "autoattr" class
+        for line in self.__class__.attributes.split("\n"):
+            line = line.strip("\x20\x09,")
+            if not line or line[0].startswith("#"):
+                continue
+            attr, value = line.split(None, 1)
+            self.load_attr(attr, value, kw)
+
+        if not self.display_size:
+            self.display_size = SIZE
+
+        self.blocksize = self.display_size[0] // self.window_width
+
+        self.scroll_count = 0
+
+    def load_attr(self, attrname, default, kw):
+        if isinstance(default, str):
+            if default.isdigit():
+                default = int(default)
+            elif default.startswith("self."):
+                default = getattr(self, default[len("self."):])
+            elif default == "None":
+                default = None
+        setattr(self, attrname, kw.get(attrname, default))
 
     def load(self):
         self.image = pygame.image.load(self.scene_path_prefix + self.mapfile)
         self.palette = Palette(self.scene_path_prefix + self.mapdescription)
+        self.width, self.height = self.image.get_size()
 
     def __getitem__(self, position):
         try:
@@ -113,14 +160,37 @@ class Scene(object):
         # TODO: load scene block images
         return color
 
+    def move(self, direction):
+        self.target_left += direction[0]
+        self.target_top += direction[1]
+
+        if self.target_left < - self.h_margin:
+            self.target_left = - self.h_margin
+        elif self.target_left > self.width - self.window_width + self.h_margin:
+            self.target_left = self.width - self.window_width + self.h_margin
+        if self.target_top < - self.v_margin:
+            self.target_top = -self.v_margin
+        elif self.target_top > self.height - self.window_height + self.v_margin:
+            self.target_top = self.height - self.window_height + self.v_margin
+
     def update(self):
-        pass
+        self.scroll_count += 1
+        if not self.scroll_count % self.scroll_rate:
+            return
+        self.scroll_count = 0
+        if self.top < self.target_top:
+            self.top += 1
+        elif self.top > self.target_top:
+            self.top -= 1
+        if self.left < self.target_left:
+            self.left += 1
+        elif self.left > self.target_left:
+            self.left -= 1
 
 
 def main():
-    mapfile = "scene0.png"
-    mapdescription = "scene0.gpl"
-    cont = Controller(SIZE, Scene(mapfile, mapdescription))
+    scene = Scene('scene0')
+    cont = Controller(SIZE, scene)
     try:
         while True:
             pygame.event.pump()
@@ -132,6 +202,9 @@ def main():
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
                 raise GameOver
+            for direction in "RIGHT LEFT UP DOWN".split():
+                if keys[getattr(pygame, "K_" + direction)]:
+                    scene.move(getattr(Directions, direction))
 
     except GameOver:
         # cont.scene = EndGameScene()
