@@ -124,7 +124,7 @@ class Scene(object):
         self.tiles = {}
 
         # TODO: factor this out to a mixin "autoattr" class
-        for line in self.__class__.attributes.split("\n"):
+        for line in self.attributes.split("\n"):
             line = line.strip("\x20\x09,")
             if not line or line[0].startswith("#"):
                 continue
@@ -205,6 +205,20 @@ class Scene(object):
             self.left += 1
         elif self.left > self.target_left:
             self.left -= 1
+
+
+CharacterClasses = {}
+class CharacterRegistry(type):
+    def  __new__(metacls, name, bases, dct):
+        cls = type.__new__(metacls, name, bases, dct)
+        CharacterClasses[name] = cls
+        return cls
+
+
+class Character(pygame.sprite.Sprite):
+    __metaclass__ = CharacterRegistry
+    def __init__(self):
+        super(Character, self).__init__()
 
 
 def main():
