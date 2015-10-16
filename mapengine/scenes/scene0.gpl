@@ -3,6 +3,8 @@ Name: scene0
 Columns: 1
 #
   0 255   0	grass
-  0   0   0 brick
+  0   0   0	brick
   0  42 255	water
 143  11  11	wood
+255 255   0	hero
+255   0   0	animal0

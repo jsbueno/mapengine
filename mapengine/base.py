@@ -1,9 +1,16 @@
 # coding: utf-8
+
+import logging
+
 import pygame
 
 from pygame.color import Color
+from pygame.sprite import Sprite, Group
 
 SIZE = 800, 600
+
+logger = logging
+logger.basicConfig()
 
 
 class Directions(object):
@@ -19,27 +26,70 @@ class Controller(object):
     def __init__(self, size, scene=None, **kw):
         self.width, self.height = self.size = size
         self.screen = pygame.display.set_mode(size, **kw)
+        self.load_scene(scene)
+
+    def load_scene(self, scene):
         self.scene = scene
+        self.all_actors = Group()
+        self.actors = {}
+        self.load_initial_actors()
+
+    def load_initial_actors(self):
+        for x in range(self.scene.width):
+            for y in range(self.scene.height):
+                cls = self.scene.get_actor_at((x, y))
+                if not cls:
+                    continue
+                name = cls.__name__.lower()
+                actor = cls(self)
+                actor.pos = (x, y)
+                self.all_actors.add(actor)
+                self.actors.setdefault(name, Group())
+                self.actors[name].add(actor)
+                if getattr(actor, "main_character", False):
+                    self.set_main_character(actor)
+
+    def set_main_character(self, actor):
+        self.main_character = Group()
+        self.main_character.add(actor)
 
     def update(self):
         self.scene.update()
+        self.all_actors.update()
         self.draw()
 
     def draw(self):
         self.background()
+        self.draw_actors()
+
+    scale = property(lambda self: self.scene.blocksize)
+    blocks_x = property(lambda self: self.width // self.scale)
+    blocks_y = property(lambda self: self.height // self.scale)
 
     def background(self):
         scene = self.scene
-        scale = scene.blocksize
-        blocks_x = self.width // scale
-        blocks_y = self.width // scale
-        for x in range(blocks_x):
-            for y in range(blocks_y):
+        scale = self.scale
+        for x in range(self.blocks_x):
+            for y in range(self.blocks_y):
                 image = scene[x + scene.left, y + scene.top]
                 if isinstance(image, Color):
                     pygame.draw.rect(self.screen, image, (x * scale, y * scale, scale, scale))
                 else:  # image
                     self.screen.blit(image, (x * scale, y * scale))
+
+    def position_on_screen(self, pos):
+        return (self.scene.left <= pos[0] < self.scene.left + self.blocks_x and
+                self.scene.top <= pos[1] < self.scene.top + self.blocks_y)
+
+    def draw_actors(self):
+        scale = self.scene.blocksize
+        for actor in self.all_actors:
+            if not self.position_on_screen(actor.pos):
+                continue
+            x, y = actor.pos
+            x -= self.scene.left
+            y -= self.scene.top
+            self.screen.blit(actor.image, (x * scale, y * scale))
 
     def quit(self):
         pygame.quit()
@@ -113,15 +163,15 @@ class Scene(object):
     scroll_rate 8
 
     out_of_map self.out_of_map
+    actor_plane_sufix _actors
 
     """
 
     def __init__(self, scene_name, **kw):
         # FIXME: allow different extensions, attempt to file-name case sensitiveness
+        self.scene_name = scene_name
         self.mapfile = scene_name + ".png"
         self.mapdescription = scene_name + ".gpl"
-        self.load()
-        self.tiles = {}
 
         # TODO: factor this out to a mixin "autoattr" class
         for line in self.attributes.split("\n"):
@@ -130,6 +180,9 @@ class Scene(object):
                 continue
             attr, value = line.split(None, 1)
             self.load_attr(attr, value, kw)
+
+        self.load()
+        self.tiles = {}
 
         if not self.display_size:
             self.display_size = SIZE
@@ -150,6 +203,11 @@ class Scene(object):
 
     def load(self):
         self.image = pygame.image.load(self.scene_path_prefix + self.mapfile)
+        try:
+            self.actor_plane = pygame.image.load(self.scene_path_prefix + self.scene_name + self.actor_plane_sufix + ".png")
+        except (pygame.error, IOError):
+            self.actor_plane = pygame.surface.Surface((1, 1))
+            logger.error("Could not find character plane for scene {}".format(self.scene_name))
         self.palette = Palette(self.scene_path_prefix + self.mapdescription)
         self.width, self.height = self.image.get_size()
 
@@ -179,6 +237,26 @@ class Scene(object):
             self.tiles[name] = img
         return self.tiles[name]
 
+    def get_actor_at(self, position):
+        """
+        At scene load all positions are scanned for actor instantiation.
+        This is called by the controller automatically for each position on the map.
+        """
+        try:
+            color = self.actor_plane.get_at(position)
+        except IndexError:
+            return None
+        # for transparency colors, no actor:
+        if color[3] == 0:
+            return None
+        # TODO: load scene block images
+        try:
+            name = self.palette[color]
+        except KeyError:
+            # Unregistered actor
+            return None
+        return GameObjectClasses.get(name, name)
+
     def move(self, direction):
         self.target_left += direction[0]
         self.target_top += direction[1]
@@ -207,18 +285,45 @@ class Scene(object):
             self.left -= 1
 
 
-CharacterClasses = {}
-class CharacterRegistry(type):
-    def  __new__(metacls, name, bases, dct):
+GameObjectClasses = {}
+
+
+class GameObjectRegistry(type):
+    def __new__(metacls, name, bases, dct):
         cls = type.__new__(metacls, name, bases, dct)
-        CharacterClasses[name] = cls
+        GameObjectClasses[name.lower()] = cls
         return cls
 
 
-class Character(pygame.sprite.Sprite):
-    __metaclass__ = CharacterRegistry
-    def __init__(self):
-        super(Character, self).__init__()
+class GameObject(Sprite):
+    __metaclass__ = GameObjectRegistry
+
+    def __init__(self, controller):
+        self.controller = controller
+        # TODO: allow for more sofisticated image loading
+        self.image_path = self.controller.scene.scene_path_prefix + self.__class__.__name__.lower() + ".png"
+        img = pygame.image.load(self.image_path)
+        if controller.scene.blocksize != img.get_width():
+            ratio = float(controller.scene.blocksize) / img.get_width()
+            img = pygame.transform.rotozoom(img, 0, ratio)
+        self.image = img
+        super(GameObject, self).__init__()
+
+
+####
+# From here on, example and testing code:
+
+
+class Actor(GameObject):
+    pass
+
+
+class Hero(Actor):
+    main_character = True
+
+
+class Animal0(Actor):
+    pass
 
 
 def main():
