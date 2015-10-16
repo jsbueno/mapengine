@@ -315,18 +315,52 @@ class GameObject(Sprite):
 
 
 class Actor(GameObject):
-    pass
+
+    base_move_rate = 4
+
+    def __init__(self, *args, **kw):
+        super(Actor, self).__init__(*args, **kw)
+        self.move_counter = 0
+
+    def move(self, direction):
+        if self.move_counter < self.base_move_rate:
+            return
+        # TODO: implement a simple class for vector algebra like this
+        x, y = self.pos
+        x += direction[0]
+        y += direction[1]
+        self.pos = x, y
+        self.move_counter = 0
+
+    def update(self):
+        super(Actor, self).update()
+        self.move_counter += 1
 
 
 class Hero(Actor):
     main_character = True
+
+    margin = 2
+
+    def update(self):
+        super(Hero, self).update()
+
+        if self.pos[0] <= self.controller.scene.left + self.margin:
+            self.controller.scene.target_left = self.pos[0] - self.margin
+        elif self.pos[0] > (self.controller.scene.left + self.controller.blocks_x - self.margin):
+            self.controller.scene.target_left = self.pos[0] - self.controller.blocks_x + self.margin
+
+        if self.pos[1] <= self.controller.scene.top + self.margin:
+            self.controller.scene.target_top = self.pos[1] - self.margin
+        elif (self.pos[1] > self.controller.scene.top + self.controller.blocks_y - self.margin):
+            self.controller.scene.target_top = self.pos[1] - self.controller.blocks_y + self.margin
 
 
 class Animal0(Actor):
     pass
 
 
-def main():
+def main(godmode):
     scene = Scene('scene0')
     cont = Controller(SIZE, scene)
     try:
@@ -340,9 +374,13 @@ def main():
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
                 raise GameOver
-            for direction in "RIGHT LEFT UP DOWN".split():
-                if keys[getattr(pygame, "K_" + direction)]:
-                    scene.move(getattr(Directions, direction))
+            for direction_name in "RIGHT LEFT UP DOWN".split():
+                if keys[getattr(pygame, "K_" + direction_name)]:
+                    direction = getattr(Directions, direction_name)
+                    if godmode:
+                        scene.move(direction)
+                    else:
+                        cont.main_character.sprites()[0].move(direction)
 
     except GameOver:
         # cont.scene = EndGameScene()
@@ -352,5 +390,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    godmode = (sys.argv[1] == "--godmode") if len(sys.argv) >= 2 else False
+    if godmode:
+        del Hero.update
+    main(godmode)
 
