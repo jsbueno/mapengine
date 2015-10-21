@@ -17,6 +17,7 @@ class Directions(object):
     # TODO: create some simple const type with a nice REPR
     RIGHT, LEFT, UP, DOWN = (1, 0), (-1, 0), (0, -1), (0, 1)
 
+PAUSE = (0,0)
 
 class GameOver(Exception):
     pass
@@ -277,7 +278,7 @@ class Scene(object):
         except KeyError:
             # Unregistered actor
             return None
-        return GameObjectClasses.get(name, name)
+        return GameObjectClasses.get(name, None)
 
     def move(self, direction):
         self.target_left += direction[0]
@@ -335,13 +336,6 @@ class GameObject(Sprite):
         super(GameObject, self).__init__()
 
 
-####
-# From here on, it should be only example and testing code -
-# but some refactoring is needed
-# (The main_actor walks and scroll scene part, mainly)
-
-
-
 class Actor(GameObject):
 
     base_move_rate = 4
@@ -366,42 +360,8 @@ class Actor(GameObject):
         self.move_counter += 1
         self.tick += 1
 
-
-class Hero(Actor):
-    main_character = True
-
-    margin = 2
-
-    def update(self):
-        super(Hero, self).update()
-
-        if self.pos[0] <= self.controller.scene.left + self.margin:
-            self.controller.scene.target_left = self.pos[0] - self.margin
-        elif self.pos[0] > (self.controller.scene.left + self.controller.blocks_x - self.margin - 1):
-            self.controller.scene.target_left = self.pos[0] - self.controller.blocks_x + self.margin + 1
-
-        if self.pos[1] <= self.controller.scene.top + self.margin:
-            self.controller.scene.target_top = self.pos[1] - self.margin
-        elif (self.pos[1] > self.controller.scene.top + self.controller.blocks_y - self.margin - 1):
-            self.controller.scene.target_top = self.pos[1] - self.controller.blocks_y + self.margin + 1
-
-
-
-PAUSE = (0,0)
-class Animal0(Actor):
-    locals().update(Directions.__dict__)
-    pattern = [RIGHT, RIGHT, RIGHT, PAUSE, LEFT, LEFT, LEFT, PAUSE]
-    move_rate = 12
-
-    def update(self):
-        if not self.tick % self.move_rate:
-            self.move(self.pattern[(self.tick // self.move_rate) % len(self.pattern)  ])
-        super(Animal0, self).update()
-
-
-def main(godmode):
-    scene = Scene('scene0')
-    cont = Controller(SIZE, scene)
+def simpleloop(scene, size, godmode=False):
+    cont = Controller(size, scene)
     try:
         while True:
             pygame.event.pump()
@@ -426,6 +386,46 @@ def main(godmode):
         pass
     finally:
         cont.quit()
+
+####
+# From here on, it should be only example and testing code -
+# but some refactoring is probably needed
+#
+
+class Hero(Actor):
+    main_character = True
+
+    margin = 2
+
+    def update(self):
+        super(Hero, self).update()
+
+        if self.pos[0] <= self.controller.scene.left + self.margin:
+            self.controller.scene.target_left = self.pos[0] - self.margin
+        elif self.pos[0] > (self.controller.scene.left + self.controller.blocks_x - self.margin - 1):
+            self.controller.scene.target_left = self.pos[0] - self.controller.blocks_x + self.margin + 1
+
+        if self.pos[1] <= self.controller.scene.top + self.margin:
+            self.controller.scene.target_top = self.pos[1] - self.margin
+        elif (self.pos[1] > self.controller.scene.top + self.controller.blocks_y - self.margin - 1):
+            self.controller.scene.target_top = self.pos[1] - self.controller.blocks_y + self.margin + 1
+
+
+
+class Animal0(Actor):
+    locals().update(Directions.__dict__)
+    pattern = [RIGHT, RIGHT, RIGHT, PAUSE, LEFT, LEFT, LEFT, PAUSE]
+    move_rate = 12
+
+    def update(self):
+        if not self.tick % self.move_rate:
+            self.move(self.pattern[(self.tick // self.move_rate) % len(self.pattern)  ])
+        super(Animal0, self).update()
+
+
+def main(godmode):
+    scene = Scene('scene0')
+    simpleloop(scene, SIZE)
 
 
 if __name__ == "__main__":
