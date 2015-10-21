@@ -349,6 +349,7 @@ class Actor(GameObject):
     def __init__(self, *args, **kw):
         super(Actor, self).__init__(*args, **kw)
         self.move_counter = 0
+        self.tick = 0
 
     def move(self, direction):
         if self.move_counter < self.base_move_rate:
@@ -363,6 +364,7 @@ class Actor(GameObject):
     def update(self):
         super(Actor, self).update()
         self.move_counter += 1
+        self.tick += 1
 
 
 class Hero(Actor):
@@ -384,8 +386,17 @@ class Hero(Actor):
             self.controller.scene.target_top = self.pos[1] - self.controller.blocks_y + self.margin + 1
 
 
+
+PAUSE = (0,0)
 class Animal0(Actor):
-    pass
+    locals().update(Directions.__dict__)
+    pattern = [RIGHT, RIGHT, RIGHT, PAUSE, LEFT, LEFT, LEFT, PAUSE]
+    move_rate = 12
+
+    def update(self):
+        if not self.tick % self.move_rate:
+            self.move(self.pattern[(self.tick // self.move_rate) % len(self.pattern)  ])
+        super(Animal0, self).update()
 
 
 def main(godmode):
