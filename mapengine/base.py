@@ -36,6 +36,7 @@ class Controller(object):
 
     def load_scene(self, scene):
         self.scene = scene
+        scene.set_controller(self)
         self.all_actors = Group()
         self.actors = {}
         self.load_initial_actors()
@@ -57,7 +58,7 @@ class Controller(object):
     def set_main_character(self, actor):
         self.main_character = Group()
         self.main_character.add(actor)
-    
+
     @staticmethod
     def _touch(actor1, actor2):
         if actor1 is actor2:
@@ -70,6 +71,8 @@ class Controller(object):
         for actor in self.all_actors:
             for collision in pygame.sprite.spritecollide(actor, self.all_actors, False, collided=self._touch):
                 actor.on_touch(collision)
+            if isinstance(self.scene[actor.pos], GameObject):
+                self.scene[actor.pos].on_touch(actor)
         self.draw()
 
     def draw(self):
@@ -86,7 +89,8 @@ class Controller(object):
         scale = self.scale
         for x in range(self.blocks_x):
             for y in range(self.blocks_y):
-                image = scene[x + scene.left, y + scene.top]
+                obj = scene[x + scene.left, y + scene.top]
+                image = obj.image if hasattr(obj, "image") else obj
                 self._draw_tile_at((x,y), image)
         # TODO: Use these to further improve background caching, but for
         # games with animated background.
@@ -211,8 +215,13 @@ class Scene(object):
             attr, value = line.split(None, 1)
             self.load_attr(attr, value, kw)
 
+
+    def set_controller(self, controller):
+        # Called when scene is first passed to a controller object
+        self.controller = controller
         self.load()
         self.tiles = {}
+        self.background_plane = {}
 
         if not self.display_size:
             self.display_size = SIZE
@@ -243,6 +252,12 @@ class Scene(object):
         self.width, self.height = self.image.get_size()
 
     def __getitem__(self, position):
+        if position in self.background_plane:
+            # Self.objects contain static scene objects that may have attributes
+            # (such as hardness) - animated game Characters should derive
+            # from "Actor", and are "over" the scene: they are retrievable by
+            # "Secene.get_actor_at"
+            return self.background_plane[position]
         try:
             color = self.image.get_at(position)
         except IndexError:
@@ -251,12 +266,17 @@ class Scene(object):
         try:
             name = self.palette[color]
         except KeyError:
+            self.background_plane[position] = color
             return color
-        try:
-            return self.tiles[name]
-        except KeyError:
-            pass
+        if name in self.tiles:
+            if isinstance(self.tiles[name], type):
+                return self.tiles[name](self.controller, position)
+            else:
+                return self.tiles[name]
 
+        if name.lower() in GameObjectClasses:
+            self.tiles[name] = GameObjectClasses[name.lower()]
+            return self.tiles[name](self.controller, position)
         try:
             img = pygame.image.load(self.scene_path_prefix + name + ".png")
         except (pygame.error, IOError):
@@ -332,8 +352,10 @@ class GameObjectRegistry(type):
 class GameObject(Sprite):
     __metaclass__ = GameObjectRegistry
 
-    def __init__(self, controller):
+    hardness = 0
+    def __init__(self, controller, pos=(0,0)):
         self.controller = controller
+        self.pos = pos
         # TODO: allow for more sofisticated image loading
         self.image_path = self.controller.scene.scene_path_prefix + self.__class__.__name__.lower() + ".png"
         img = pygame.image.load(self.image_path)
@@ -343,19 +365,26 @@ class GameObject(Sprite):
         self.image = img
         super(GameObject, self).__init__()
         self.update()
-        
+
     def update(self):
         super(GameObject, self).update()
         bl = self.controller.scene.blocksize
+        # location rectangle, in pixels, relative to the scene (not the screen)
         self.rect = pygame.Rect([self.pos[0] * bl, self.pos[1] * bl, bl, bl])
 
+    def on_touch(self, other):
+        """
+        Override this to create a behavior when object is touched by another one
+        """
+        pass
 
 class Actor(GameObject):
 
+    strength = 4
     base_move_rate = 4
 
     def __init__(self, *args, **kw):
-        self.pos = kw.pop("pos", (0,0))
+        # self.pos = kw.pop("pos", (0,0))
         self.move_counter = 0
         self.tick = 0
         super(Actor, self).__init__(*args, **kw)
@@ -367,6 +396,8 @@ class Actor(GameObject):
         x, y = self.pos
         x += direction[0]
         y += direction[1]
+        if getattr(self.controller.scene[x, y], "hardness", 0) > self.strength:
+            return
         self.pos = x, y
         self.move_counter = 0
 
@@ -375,11 +406,7 @@ class Actor(GameObject):
         self.move_counter += 1
         self.tick += 1
 
-    def on_touch(self, other):
-        """
-        Override this to create a behavior when object is touched by another one
-        """
-        pass
+
 
 def simpleloop(scene, size, godmode=False):
     cont = Controller(size, scene)
@@ -412,6 +439,19 @@ def simpleloop(scene, size, godmode=False):
 # From here on, it should be only example and testing code -
 # but some refactoring is probably needed
 #
+
+
+class Brick(GameObject):
+    hardness = 5
+
+
+class Wood(GameObject):
+    def on_touch(self, other):
+        # Example: raise the Hero strenght when wood is touched
+        # (a complete game should have a way for this extra strenght to
+        # wane out)
+        other.strength = 6
+
 
 class Hero(Actor):
     main_character = True
