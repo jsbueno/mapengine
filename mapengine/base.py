@@ -368,9 +368,10 @@ class Event(object):
         self.countdown = countdown
         self.attribute = attribute
         self.value = value
-    
+
     def __hash__(self):
         return hash(self.attribute)
+
 
 class GameObject(Sprite):
     __metaclass__ = GameObjectRegistry
@@ -379,18 +380,23 @@ class GameObject(Sprite):
     def __init__(self, controller, pos=(0,0)):
         self.controller = controller
         self.pos = pos
+
+        self.load_image()
+        self.events = set()
+        self.tick = 0
+        super(GameObject, self).__init__()
+        self.update()
+
+    def load_image(self):
+        controller = self.controller
         # TODO: allow for more sofisticated image loading
-        self.image_path = self.controller.scene.scene_path_prefix + self.__class__.__name__.lower() + ".png"
+        self.image_path = controller.scene.scene_path_prefix + self.__class__.__name__.lower() + ".png"
         img = pygame.image.load(self.image_path)
         if controller.scene.blocksize != img.get_width():
             ratio = float(controller.scene.blocksize) / img.get_width()
             img = pygame.transform.rotozoom(img, 0, ratio)
         self.base_image = img
         self.image = img
-        self.events = set()
-        self.tick = 0
-        super(GameObject, self).__init__()
-        self.update()
 
     def update(self):
         super(GameObject, self).update()
@@ -405,7 +411,10 @@ class GameObject(Sprite):
             if event.countdown != 0:
                 event.countdown -= 1
                 continue
-            setattr(self, event.attribute, event.value)
+            if callable(event.value):
+                event.value(self)
+            else:
+                setattr(self, event.attribute, event.value)
             self.events.remove(event)
 
     def on_over(self, other):
@@ -413,11 +422,12 @@ class GameObject(Sprite):
         Override this to create a behavior when object is touched by another one
         """
         pass
-    
+
     def on_touch(self, other):
         """
         Called when an actor touches this object
         """
+        pass
 
 class Actor(GameObject):
 
@@ -452,21 +462,21 @@ class Actor(GameObject):
             self.image = self.base_image
         super(Actor, self).update()
         self.move_counter += 1
-        
+
+
 class FallingActor(Actor):
     """
     Use this class for side-view games, where things "fall" if there is no ground bellow them
     """
     weight = 1
     gravity = (0, 1)
-    
+
     def update(self):
         super(FallingActor, self).update()
         if getattr(self.controller[self.pos[0] + self.gravity[0], self.pos[1] + self.gravity[1]], "hardness", 0) < self.weight:
             self.move(self.gravity)
             # if self.pos > self.controller.scene.height:
             #    self.kill()
-
 
 
 def simpleloop(scene, size, godmode=False):
@@ -512,8 +522,10 @@ class Wood(GameObject):
     def on_touch(self, other):
         # Example: raise the Hero strength when wood is touched
         other.strength = 6
+        other.blinking = True
         other.events.add(Event(5 * FRAME_DELAY, "blinking", False))
         other.events.add(Event(5 * FRAME_DELAY, "strength", 4))
+
 
 class Hero(Actor):  # Try inheriting from FallingActor for Platform games
     main_character = True
