@@ -28,13 +28,14 @@ class Controller(object):
     def __init__(self, size, scene=None, **kw):
         self.width, self.height = self.size = size
         self.screen = pygame.display.set_mode(size, **kw)
+        self.actor_positions = {}
         self.load_scene(scene)
 
         self.old_top = -20
         self.old_left = -20
         self.old_tiles = {}
         self.dirty_tiles = {}
-        self.actor_positions = {}
+
 
     def load_scene(self, scene):
         self.scene = scene
@@ -451,6 +452,21 @@ class Actor(GameObject):
             self.image = self.base_image
         super(Actor, self).update()
         self.move_counter += 1
+        
+class FallingActor(Actor):
+    """
+    Use this class for side-view games, where things "fall" if there is no ground bellow them
+    """
+    weight = 1
+    gravity = (0, 1)
+    
+    def update(self):
+        super(FallingActor, self).update()
+        if getattr(self.controller[self.pos[0] + self.gravity[0], self.pos[1] + self.gravity[1]], "hardness", 0) < self.weight:
+            self.move(self.gravity)
+            # if self.pos > self.controller.scene.height:
+            #    self.kill()
+
 
 
 def simpleloop(scene, size, godmode=False):
@@ -499,7 +515,7 @@ class Wood(GameObject):
         other.events.add(Event(5 * FRAME_DELAY, "blinking", False))
         other.events.add(Event(5 * FRAME_DELAY, "strength", 4))
 
-class Hero(Actor):
+class Hero(Actor):  # Try inheriting from FallingActor for Platform games
     main_character = True
 
     margin = 2
