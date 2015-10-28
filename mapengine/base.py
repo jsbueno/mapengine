@@ -8,6 +8,7 @@ from pygame.color import Color
 from pygame.sprite import Sprite, Group
 
 SIZE = 800, 600
+FRAME_DELAY = 30
 
 logger = logging
 logger.basicConfig()
@@ -33,6 +34,7 @@ class Controller(object):
         self.old_left = -20
         self.old_tiles = {}
         self.dirty_tiles = {}
+        self.actor_positions = {}
 
     def load_scene(self, scene):
         self.scene = scene
@@ -70,9 +72,9 @@ class Controller(object):
         self.all_actors.update()
         for actor in self.all_actors:
             for collision in pygame.sprite.spritecollide(actor, self.all_actors, False, collided=self._touch):
-                actor.on_touch(collision)
+                actor.on_over(collision)
             if isinstance(self.scene[actor.pos], GameObject):
-                self.scene[actor.pos].on_touch(actor)
+                self.scene[actor.pos].on_over(actor)
         self.draw()
 
     def draw(self):
@@ -115,14 +117,26 @@ class Controller(object):
     def draw_actors(self):
         scale = self.scene.blocksize
         scene = self.scene
+        self.actor_positions = {}
         for actor in self.all_actors:
+            self.actor_positions[actor.pos] = actor
             if not self.position_on_screen(actor.pos):
+                continue
+            if not actor.image:
                 continue
             x, y = actor.pos
             x -= self.scene.left
             y -= self.scene.top
             self.screen.blit(actor.image, (x * scale, y * scale))
             self.dirty_tiles[x, y] = True
+
+    def __getitem__(self, pos):
+        """
+        Position is relative to the scene
+        """
+        if pos in self.actor_positions:
+            return self.actor_positions[pos]
+        return self.scene[pos]
 
     def quit(self):
         pygame.quit()
@@ -348,6 +362,14 @@ class GameObjectRegistry(type):
         GameObjectClasses[name.lower()] = cls
         return cls
 
+class Event(object):
+    def __init__(self, countdown, attribute, value):
+        self.countdown = countdown
+        self.attribute = attribute
+        self.value = value
+    
+    def __hash__(self):
+        return hash(self.attribute)
 
 class GameObject(Sprite):
     __metaclass__ = GameObjectRegistry
@@ -362,31 +384,50 @@ class GameObject(Sprite):
         if controller.scene.blocksize != img.get_width():
             ratio = float(controller.scene.blocksize) / img.get_width()
             img = pygame.transform.rotozoom(img, 0, ratio)
+        self.base_image = img
         self.image = img
+        self.events = set()
+        self.tick = 0
         super(GameObject, self).__init__()
         self.update()
 
     def update(self):
         super(GameObject, self).update()
+        self.process_events()
         bl = self.controller.scene.blocksize
         # location rectangle, in pixels, relative to the scene (not the screen)
         self.rect = pygame.Rect([self.pos[0] * bl, self.pos[1] * bl, bl, bl])
+        self.tick += 1
 
-    def on_touch(self, other):
+    def process_events(self):
+        for  event in list(self.events):
+            if event.countdown != 0:
+                event.countdown -= 1
+                continue
+            setattr(self, event.attribute, event.value)
+            self.events.remove(event)
+
+    def on_over(self, other):
         """
         Override this to create a behavior when object is touched by another one
         """
         pass
+    
+    def on_touch(self, other):
+        """
+        Called when an actor touches this object
+        """
 
 class Actor(GameObject):
 
     strength = 4
     base_move_rate = 4
+    blinking = False
 
     def __init__(self, *args, **kw):
         # self.pos = kw.pop("pos", (0,0))
         self.move_counter = 0
-        self.tick = 0
+
         super(Actor, self).__init__(*args, **kw)
 
     def move(self, direction):
@@ -396,27 +437,33 @@ class Actor(GameObject):
         x, y = self.pos
         x += direction[0]
         y += direction[1]
-        if getattr(self.controller.scene[x, y], "hardness", 0) > self.strength:
+        if isinstance(self.controller[x, y] , GameObject):
+            self.controller[x,y].on_touch(self)
+        if getattr(self.controller[x, y], "hardness", 0) > self.strength:
             return
         self.pos = x, y
         self.move_counter = 0
 
     def update(self):
+        if self.blinking and self.tick % 2:
+            self.image = None
+        else:
+            self.image = self.base_image
         super(Actor, self).update()
         self.move_counter += 1
-        self.tick += 1
-
 
 
 def simpleloop(scene, size, godmode=False):
     cont = Controller(size, scene)
     try:
         while True:
+            frame_start = pygame.time.get_ticks()
             pygame.event.pump()
             cont.update()
             cont.draw()
             pygame.display.flip()
-            pygame.time.delay(30)
+            delay = max(0, FRAME_DELAY - (pygame.time.get_ticks() - frame_start))
+            pygame.time.delay(delay)
 
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
@@ -447,11 +494,10 @@ class Brick(GameObject):
 
 class Wood(GameObject):
     def on_touch(self, other):
-        # Example: raise the Hero strenght when wood is touched
-        # (a complete game should have a way for this extra strenght to
-        # wane out)
+        # Example: raise the Hero strength when wood is touched
         other.strength = 6
-
+        other.events.add(Event(5 * FRAME_DELAY, "blinking", False))
+        other.events.add(Event(5 * FRAME_DELAY, "strength", 4))
 
 class Hero(Actor):
     main_character = True
@@ -485,6 +531,10 @@ class Animal0(Actor):
 
     def on_touch(self, other):
         if isinstance(other, Hero):
+            other.blinking = True
+            other.strength = 6
+            other.events.add(Event(5 * FRAME_DELAY, "blinking", False))
+            other.events.add(Event(5 * FRAME_DELAY, "strength", 4))
             self.kill()
 
 def main(godmode):
