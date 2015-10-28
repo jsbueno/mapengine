@@ -47,8 +47,7 @@ class Controller(object):
                 if not cls:
                     continue
                 name = cls.__name__.lower()
-                actor = cls(self)
-                actor.pos = (x, y)
+                actor = cls(self, pos=(x, y))
                 self.all_actors.add(actor)
                 self.actors.setdefault(name, Group())
                 self.actors[name].add(actor)
@@ -58,10 +57,19 @@ class Controller(object):
     def set_main_character(self, actor):
         self.main_character = Group()
         self.main_character.add(actor)
+    
+    @staticmethod
+    def _touch(actor1, actor2):
+        if actor1 is actor2:
+            return False
+        return actor1.rect.colliderect(actor2.rect)
 
     def update(self):
         self.scene.update()
         self.all_actors.update()
+        for actor in self.all_actors:
+            for collision in pygame.sprite.spritecollide(actor, self.all_actors, False, collided=self._touch):
+                actor.on_touch(collision)
         self.draw()
 
     def draw(self):
@@ -334,6 +342,12 @@ class GameObject(Sprite):
             img = pygame.transform.rotozoom(img, 0, ratio)
         self.image = img
         super(GameObject, self).__init__()
+        self.update()
+        
+    def update(self):
+        super(GameObject, self).update()
+        bl = self.controller.scene.blocksize
+        self.rect = pygame.Rect([self.pos[0] * bl, self.pos[1] * bl, bl, bl])
 
 
 class Actor(GameObject):
@@ -341,9 +355,10 @@ class Actor(GameObject):
     base_move_rate = 4
 
     def __init__(self, *args, **kw):
-        super(Actor, self).__init__(*args, **kw)
+        self.pos = kw.pop("pos", (0,0))
         self.move_counter = 0
         self.tick = 0
+        super(Actor, self).__init__(*args, **kw)
 
     def move(self, direction):
         if self.move_counter < self.base_move_rate:
@@ -359,6 +374,12 @@ class Actor(GameObject):
         super(Actor, self).update()
         self.move_counter += 1
         self.tick += 1
+
+    def on_touch(self, other):
+        """
+        Override this to create a behavior when object is touched by another one
+        """
+        pass
 
 def simpleloop(scene, size, godmode=False):
     cont = Controller(size, scene)
@@ -422,6 +443,9 @@ class Animal0(Actor):
             self.move(self.pattern[(self.tick // self.move_rate) % len(self.pattern)  ])
         super(Animal0, self).update()
 
+    def on_touch(self, other):
+        if isinstance(other, Hero):
+            self.kill()
 
 def main(godmode):
     scene = Scene('scene0')
