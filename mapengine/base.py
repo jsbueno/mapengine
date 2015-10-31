@@ -266,18 +266,21 @@ class Scene(object):
         self.palette = Palette(self.scene_path_prefix + self.mapdescription)
         self.width, self.height = self.image.get_size()
 
+
     def __getitem__(self, position):
-        if position in self.background_plane:
+        if not position in self.background_plane:
+            self.background_plane[position] = self._raw_getitem(position)
             # Self.objects contain static scene objects that may have attributes
             # (such as hardness) - animated game Characters should derive
             # from "Actor", and are "over" the scene: they are retrievable by
-            # "Secene.get_actor_at"
-            return self.background_plane[position]
+            # "Scene.get_actor_at"
+        return self.background_plane[position]
+
+    def _raw_getitem(self, position):
         try:
             color = self.image.get_at(position)
         except IndexError:
             return self.out_of_map
-        # TODO: load scene block images
         try:
             name = self.palette[color]
         except KeyError:
