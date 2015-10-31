@@ -284,7 +284,6 @@ class Scene(object):
         try:
             name = self.palette[color]
         except KeyError:
-            self.background_plane[position] = color
             return color
         if name in self.tiles:
             if isinstance(self.tiles[name], type):
@@ -305,6 +304,9 @@ class Scene(object):
                 img = pygame.transform.rotozoom(img, 0, ratio)
             self.tiles[name] = img
         return self.tiles[name]
+
+    def __delitem__(self, position):
+        del self.background_plane[position]
 
     def get_actor_at(self, position):
         """
@@ -560,7 +562,7 @@ class Animal0(Actor):
             self.move(self.pattern[(self.tick // self.move_rate) % len(self.pattern)  ])
         super(Animal0, self).update()
 
-    def on_touch(self, other):
+    def on_over(self, other):
         if isinstance(other, Hero):
             other.blinking = True
             other.strength = 6
