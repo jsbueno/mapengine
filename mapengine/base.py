@@ -88,6 +88,8 @@ class Controller(object):
     blocks_y = property(lambda self: self.height // self.scale)
 
     def background(self):
+        if self.scene.overlay_image:
+            return self.overlay_background()
         scene = self.scene
         scale = self.scale
         for x in range(self.blocks_x):
@@ -97,8 +99,8 @@ class Controller(object):
                 self._draw_tile_at((x,y), image)
         # TODO: Use these to further improve background caching, but for
         # games with animated background.
-        self.old_top = scene.top
         self.old_left = scene.left
+        self.old_top = scene.top
 
     def _draw_tile_at(self, (x,y), image):
         scale = self.scale
@@ -110,6 +112,14 @@ class Controller(object):
             self.screen.blit(image, (x * scale, y * scale))
         self.old_tiles[x, y] = image
         self.dirty_tiles[x, y] = False
+
+    def overlay_background(self):
+        scene = self.scene
+        pixel_left = scene.left * scene.blocksize
+        pixel_top = scene.top * scene.blocksize
+        self.screen.blit(scene.overlay_image, (0,0), area=(pixel_left, pixel_top, self.width, self.height))
+        self.old_left = scene.left
+        self.old_top = scene.top
 
     def position_on_screen(self, pos):
         return (self.scene.left <= pos[0] < self.scene.left + self.blocks_x and
@@ -209,18 +219,25 @@ class Scene(object):
     window_width 16
     window_height 12
 
+    display_type block   # allowed values: 'block' and 'overlay'
+                         # 'overlay' will load a <name>_overlay.png file that will be 
+                         # displayed as game background instead of block tiles
+
     scroll_rate 8
 
     out_of_map self.out_of_map
     actor_plane_sufix _actors
+    overlay_plane_sufix _overlay
 
     """
+
 
     def __init__(self, scene_name, **kw):
         # FIXME: allow different extensions, attempt to file-name case sensitiveness
         self.scene_name = scene_name
-        self.mapfile = scene_name + ".png"
+        self.mapfile = scene_name
         self.mapdescription = scene_name + ".gpl"
+        self.overlay_image = None
 
         # TODO: factor this out to a mixin "autoattr" class
         for line in self.attributes.split("\n"):
@@ -228,20 +245,18 @@ class Scene(object):
             if not line or line[0].startswith("#"):
                 continue
             attr, value = line.split(None, 1)
+            value = value.split("#")[0].strip()
             self.load_attr(attr, value, kw)
 
 
     def set_controller(self, controller):
         # Called when scene is first passed to a controller object
         self.controller = controller
+        if not self.display_size:
+            self.display_size = SIZE
         self.load()
         self.tiles = {}
         self.background_plane = {}
-
-        if not self.display_size:
-            self.display_size = SIZE
-
-        self.blocksize = self.display_size[0] // self.window_width
 
         self.scroll_count = 0
 
@@ -255,16 +270,33 @@ class Scene(object):
                 default = None
         setattr(self, attrname, kw.get(attrname, default))
 
+    def image_load(self, sufix="", extension="png"):
+        img = pygame.image.load("{}{}{}.{}".format(self.scene_path_prefix, self.mapfile, sufix, extension))
+        return img
+
     def load(self):
-        self.image = pygame.image.load(self.scene_path_prefix + self.mapfile)
+        self.image = self.image_load()
         try:
-            self.actor_plane = pygame.image.load(
-                self.scene_path_prefix + self.scene_name + self.actor_plane_sufix + ".png")
+            self.actor_plane = self.image_load(self.actor_plane_sufix)
         except (pygame.error, IOError):
             self.actor_plane = pygame.surface.Surface((1, 1))
             logger.error("Could not find character plane for scene {}".format(self.scene_name))
         self.palette = Palette(self.scene_path_prefix + self.mapdescription)
         self.width, self.height = self.image.get_size()
+
+        # Scene blocksize in pixels:
+        self.blocksize = self.display_size[0] // self.window_width
+
+        if self.display_type == "overlay":
+            try:
+                overlay_image = self.image_load(self.overlay_plane_sufix)
+                ratio =  float(self.width * self.blocksize) / overlay_image.get_width()
+                # TODO: this image can become too large for big maps
+                # make use of a lazy-zooming mechanism to scale the overlay to full-size
+                # only on the displayed area.
+                self.overlay_image = pygame.transform.rotozoom(overlay_image, 0, ratio)
+            except (pygame.error, IOError):
+                logger.error("Could not load overlay image '{}.png'".format(self.mapfile + self.overlay_plane_sufix))
 
 
     def __getitem__(self, position):
@@ -384,18 +416,17 @@ class GameObject(Sprite):
     def __init__(self, controller, pos=(0,0)):
         self.controller = controller
         self.pos = pos
-
-        self.load_image()
+        self.load_image(self.__class__.__name__.lower())
         self.events = set()
         self.tick = 0
         super(GameObject, self).__init__()
         self.update()
 
-    def load_image(self):
+    def load_image(self, name):
         controller = self.controller
         img_size = controller.scene.blocksize
-        # TODO: allow for more sofisticated image loading
-        self.image_path = controller.scene.scene_path_prefix + self.__class__.__name__.lower() + ".png"
+        # TODO: allow for more sofisticated image loading - for animations.
+        self.image_path = "{}{}.{}".format(controller.scene.scene_path_prefix, name, "png")
         try:
             img = pygame.image.load(self.image_path)
         except (IOError, pygame.error):
