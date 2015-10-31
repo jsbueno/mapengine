@@ -157,7 +157,7 @@ class Palette(object):
 
     def __getitem__(self, key):
         if isinstance(key, str):
-            return self.color_names[key]
+            return self.color_names[key.lower()]
         elif isinstance(key, int):
             if key < 0:
                 key = len(self.by_index) + key
@@ -186,8 +186,8 @@ class Palette(object):
                     continue
                 r, g, b, name = line.strip().split(None, 4)
                 color = Color(*(int(component) for component in (r, g, b)))
-                self.colors[tuple(color)] = name
-                self.color_names[name] = color
+                self.colors[tuple(color)] = name.lower()
+                self.color_names[name.lower()] = color
                 self.by_index[index] = color
                 index += 1
 
@@ -290,7 +290,6 @@ class Scene(object):
                 return self.tiles[name](self.controller, position)
             else:
                 return self.tiles[name]
-
         if name.lower() in GameObjectClasses:
             self.tiles[name] = GameObjectClasses[name.lower()]
             return self.tiles[name](self.controller, position)
@@ -394,11 +393,17 @@ class GameObject(Sprite):
 
     def load_image(self):
         controller = self.controller
+        img_size = controller.scene.blocksize
         # TODO: allow for more sofisticated image loading
         self.image_path = controller.scene.scene_path_prefix + self.__class__.__name__.lower() + ".png"
-        img = pygame.image.load(self.image_path)
-        if controller.scene.blocksize != img.get_width():
-            ratio = float(controller.scene.blocksize) / img.get_width()
+        try:
+            img = pygame.image.load(self.image_path)
+        except (IOError, pygame.error):
+            color = controller.scene.palette[self.__class__.__name__]
+            img = pygame.Surface((img_size, img_size))
+            img.fill(color)
+        if img_size != img.get_width():
+            ratio = float(img_size) / img.get_width()
             img = pygame.transform.rotozoom(img, 0, ratio)
         self.base_image = img
         self.image = img
@@ -433,6 +438,7 @@ class GameObject(Sprite):
         Called when an actor touches this object
         """
         pass
+
 
 class Actor(GameObject):
 
