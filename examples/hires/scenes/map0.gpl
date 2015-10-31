@@ -1,0 +1,9 @@
+GIMP Palette
+Name: map0
+Columns: 7
+#
+ 60  61  37	Forest
+ 32  77 159	Ocean
+160 147 131	Desert
+243 248 249	Ice
+255 255   0	Hero

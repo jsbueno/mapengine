@@ -1,0 +1,7 @@
+Original map on Public Domain from:
+    http://eoimages.gsfc.nasa.gov/ve/7107/world.topo.bathy.200408.3x5400x2700.jpg
+'Hero' icons picked from: https://thenounproject.com/term/walker/79240/
+'hero.png' -> noun_34964_cc.png: 'hiker' by Luis Prado (C)
+'hero_desert.png' -> noun_60431_cc.png: 'Running' by A.M. Briganti
+'hero_boat.png' -> noun_143275_cc.png: 'Boat'by Joel Avery
+'hero_ice.png' -> noun_697.png - Public Domain from 'National Park Service Collection - US'
