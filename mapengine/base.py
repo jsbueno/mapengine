@@ -13,6 +13,7 @@ FRAME_DELAY = 30
 logger = logging
 logger.basicConfig()
 
+range = xrange
 
 class Directions(object):
     # TODO: create some simple const type with a nice REPR
@@ -43,6 +44,7 @@ class Controller(object):
         self.all_actors = Group()
         self.actors = {}
         self.load_initial_actors()
+
 
     def load_initial_actors(self):
         for x in range(self.scene.width):
@@ -87,39 +89,62 @@ class Controller(object):
     blocks_x = property(lambda self: self.width // self.scale)
     blocks_y = property(lambda self: self.height // self.scale)
 
-    def background(self):
-        if self.scene.overlay_image:
-            return self.overlay_background()
-        scene = self.scene
-        scale = self.scale
+    def iter_blocks(self):
         for x in range(self.blocks_x):
             for y in range(self.blocks_y):
-                obj = scene[x + scene.left, y + scene.top]
-                image = obj.image if hasattr(obj, "image") else obj
-                self._draw_tile_at((x,y), image)
-        # TODO: Use these to further improve background caching, but for
-        # games with animated background.
-        self.old_left = scene.left
-        self.old_top = scene.top
+                yield x, y
 
-    def _draw_tile_at(self, (x,y), image):
+    def background(self):
+        if self.scene.overlay_image:
+            self.overlay_background()
+        else:
+            self.block_background()
+        self.old_left = self.scene.left
+        self.old_top = self.scene.top
+
+    def block_background(self):
+        scene = self.scene
         scale = self.scale
-        if self.old_tiles.get((x,y), None) is image and not self.dirty_tiles.get((x, y), True):
+        for x, y in self.iter_blocks():
+            obj = scene[x + scene.left, y + scene.top]
+            image = obj.image if hasattr(obj, "image") else obj
+            self._draw_tile_at((x,y), image)
+
+    def _draw_tile_at(self, pos, image):
+        x, y = pos
+        scale = self.scale
+        if self.old_tiles.get(pos, None) is image and not self.dirty_tiles.get(pos, False):
             return
         if isinstance(image, Color):
             pygame.draw.rect(self.screen, image, (x * scale, y * scale, scale, scale))
         else:  # image
             self.screen.blit(image, (x * scale, y * scale))
-        self.old_tiles[x, y] = image
-        self.dirty_tiles[x, y] = False
+        self.old_tiles[pos] = image
+        self.dirty_tiles.pop(pos, False)
 
     def overlay_background(self):
         scene = self.scene
+        if self.old_left == scene.left and self.old_top == scene.top:
+            return self._draw_overlay_tiles()
         pixel_left = scene.left * scene.blocksize
         pixel_top = scene.top * scene.blocksize
-        self.screen.blit(scene.overlay_image, (0,0), area=(pixel_left, pixel_top, self.width, self.height))
-        self.old_left = scene.left
-        self.old_top = scene.top
+        self.screen.blit(scene.overlay_image, (0, 0), area=(pixel_left, pixel_top, self.width, self.height))
+        # if self.old_left != scene.left or self.old_top == scene.top:
+            # self.dirty_tiles = {}
+
+    def _draw_overlay_tiles(self):
+        scene = self.scene
+        blocksize = scene.blocksize
+        for pos, dirty in list(self.dirty_tiles.items()):
+            if not dirty:
+                continue
+            pixel_left = (scene.left + pos[0]) * blocksize
+            pixel_top = (scene.top + pos[1]) * blocksize
+            local_left = blocksize * pos[0]
+            local_top = blocksize * pos[1]
+            self.screen.blit(scene.overlay_image, (local_left, local_top),
+                             area=(pixel_left, pixel_top, blocksize, blocksize))
+            self.dirty_tiles.pop(pos)
 
     def position_on_screen(self, pos):
         return (self.scene.left <= pos[0] < self.scene.left + self.blocks_x and
