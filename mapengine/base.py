@@ -2,6 +2,8 @@
 
 import logging
 import os
+import random
+import textwrap
 
 import pygame
 
@@ -28,6 +30,7 @@ class GameOver(Exception):
 
 class Controller(object):
     def __init__(self, size, scene=None, **kw):
+        pygame.init()
         self.width, self.height = self.size = size
         self.screen = pygame.display.set_mode(size, **kw)
         self.actor_positions = {}
@@ -37,7 +40,7 @@ class Controller(object):
         self.old_left = -20
         self.old_tiles = {}
         self.dirty_tiles = {}
-
+        self.force_redraw = False
 
     def load_scene(self, scene):
         self.scene = scene
@@ -45,7 +48,7 @@ class Controller(object):
         self.all_actors = Group()
         self.actors = {}
         self.load_initial_actors()
-
+        self.messages = Group()
 
     def load_initial_actors(self):
         for x in range(self.scene.width):
@@ -81,9 +84,11 @@ class Controller(object):
                 self.scene[actor.pos].on_over(actor)
         self.draw()
 
+
     def draw(self):
         self.background()
         self.draw_actors()
+        self.display_messages()
 
     scale = property(lambda self: self.scene.blocksize)
     # These hold the on-screen size of the game-scene in blocks
@@ -102,6 +107,7 @@ class Controller(object):
             self.block_background()
         self.old_left = self.scene.left
         self.old_top = self.scene.top
+        self.force_redraw = False
 
     def block_background(self):
         scene = self.scene
@@ -109,12 +115,12 @@ class Controller(object):
         for x, y in self.iter_blocks():
             obj = scene[x + scene.left, y + scene.top]
             image = obj.image if hasattr(obj, "image") else obj
-            self._draw_tile_at((x,y), image)
+            self._draw_tile_at((x,y), image, self.force_redraw)
 
-    def _draw_tile_at(self, pos, image):
+    def _draw_tile_at(self, pos, image, force=False):
         x, y = pos
         scale = self.scale
-        if self.old_tiles.get(pos, None) is image and not self.dirty_tiles.get(pos, False):
+        if not force and self.old_tiles.get(pos, None) is image and not self.dirty_tiles.get(pos, False):
             return
         if isinstance(image, Color):
             pygame.draw.rect(self.screen, image, (x * scale, y * scale, scale, scale))
@@ -125,7 +131,7 @@ class Controller(object):
 
     def overlay_background(self):
         scene = self.scene
-        if self.old_left == scene.left and self.old_top == scene.top:
+        if not self.force_redraw and self.old_left == scene.left and self.old_top == scene.top:
             return self._draw_overlay_tiles()
         pixel_left = scene.left * scene.blocksize
         pixel_top = scene.top * scene.blocksize
@@ -145,9 +151,12 @@ class Controller(object):
                              area=(pixel_left, pixel_top, blocksize, blocksize))
             self.dirty_tiles.pop(pos)
 
-    def position_on_screen(self, pos):
+    def is_position_on_screen(self, pos):
         return (self.scene.left <= pos[0] < self.scene.left + self.blocks_x and
                 self.scene.top <= pos[1] < self.scene.top + self.blocks_y)
+
+    def to_screen(self, pos):
+        return pos[0] - self.scene.left, pos[1] - self.scene.top
 
     def draw_actors(self):
         scale = self.scene.blocksize
@@ -155,15 +164,30 @@ class Controller(object):
         self.actor_positions = {}
         for actor in self.all_actors:
             self.actor_positions[actor.pos] = actor
-            if not self.position_on_screen(actor.pos):
+            if not self.is_position_on_screen(actor.pos):
                 continue
             if not actor.image:
                 continue
-            x, y = actor.pos
-            x -= self.scene.left
-            y -= self.scene.top
+            x, y = self.to_screen(actor.pos)
             self.screen.blit(actor.image, (x * scale, y * scale))
             self.dirty_tiles[x, y] = True
+
+    def display_messages(self):
+        scale = self.scene.blocksize
+        for message in self.messages:
+            if not self.is_position_on_screen(message.owner.pos):
+                continue
+            image = message.render()
+            # Initially all message swill pop bellow the actors, at half-block-lenght to left
+            # TODO: enhance message block display heuristics
+
+            position = self.to_screen(message.owner.pos)
+            x = position[0] + 0.5
+            y = position[1] + 1
+            self.screen.blit(image, (int(x * scale), y * scale))
+            for j in range(0, (image.get_width() // scale) + 2):
+                for k in range(0, (image.get_height() // scale) + 1):
+                    self.dirty_tiles[int(x) + j, y + k] = True
 
     def __getitem__(self, pos):
         """
@@ -451,12 +475,89 @@ class Event(object):
     def __hash__(self):
         return hash(self.attribute)
 
+TEXT_WIDTH = 20
+
+
+class Blob(Sprite):
+    """
+    On screen text message blob
+    """
+    font_cache = {}
+    font_prefix = "fonts/"
+    def __init__(self, message,
+                 owner, width=TEXT_WIDTH,
+                 timeout=None, font="sans.ttf", size=16, bold=True, **kw):
+        self.message = message
+        self.width = width
+        path = self.font_prefix + font
+        if not path in self.font_cache:
+            self.font_cache[path] = pygame.font.Font("fonts/" + font, size)
+        self.font = self.font_cache[path]
+        self.font.set_bold(bold)
+        self.color = kw.get("color", (255,255,255))
+        self.margin = kw.get("margin", 30)
+        self.frame = kw.get("frame", 3) # 0 or None for no frame
+        self.background = kw.get("background", (0, 0, 0, 172))
+        self.antialias = kw.get("antialias", True)
+        self.line_spacing = kw.get("line_spacing", 2)
+        self.justification = kw.get("justification", "left") # left, right, center
+        self.kwargs = kw
+
+        self.text_lines = message
+        self.owner = owner
+        self.rendered_message = None
+
+        super(Blob, self).__init__()
+
+    def render(self):
+        if self.rendered_message == self.message:
+            return self.image
+        max_width = 0
+        total_height = 0
+        rendered_lines = []
+        for line in textwrap.wrap(self.message, self.width):
+            rendered_line = self.font.render(line, self.antialias, self.color)
+            rendered_lines.append(rendered_line)
+            max_width = max(max_width, rendered_line.get_width())
+            total_height += rendered_line.get_height() + self.line_spacing
+        image = pygame.Surface((max_width + 2 * self.margin, total_height + 2 * self.margin))
+        image.fill(self.background)
+        v_offset = self.margin
+        for line in rendered_lines:
+            if self.justification == "left":
+                h_pos = self.margin
+            elif self.justification == "right":
+                h_pos = image.get_width() - self.margin - line.get_width()
+            else: # center
+                h_pos = (image.get_width() - line.get_width()) // 2
+            image.blit(line, (h_pos, v_offset))
+            v_offset += line.get_height() + self.line_spacing
+
+        if self.frame:
+            pygame.draw.rect(
+                image, self.color, (
+                    self.margin // 2, self.margin // 2,
+                    max_width + self.margin,
+                    total_height + self.margin
+                ),
+                self.frame
+            )
+
+        self.image = image
+        self.rendered_message = self.message
+        return image
+
+    def kill(self):
+        self.owner.controller.force_redraw = True
+        super(Blob, self).kill()
+
 
 class GameObject(Sprite):
     __metaclass__ = GameObjectRegistry
 
     hardness = 0
     def __init__(self, controller, pos=(0,0)):
+        self.messages = Group()
         self.controller = controller
         self.pos = pos
         self.image_load(self.__class__.__name__.lower())
@@ -489,12 +590,16 @@ class GameObject(Sprite):
         self.tick += 1
 
     def process_events(self):
-        for  event in list(self.events):
-            if event.countdown != 0:
+        for event in list(self.events):
+            if event.countdown >= 0:
                 event.countdown -= 1
                 continue
-            if callable(event.value):
-                event.value(self)
+            if callable(event.attribute):
+                if event.value is None:
+                    args = []
+                elif not isinstance(event.value, list):
+                    args = [event.value]
+                event.attribute(*args)
             else:
                 setattr(self, event.attribute, event.value)
             self.events.remove(event)
@@ -510,6 +615,18 @@ class GameObject(Sprite):
         Called when an actor touches this object
         """
         pass
+
+    def show_text(self, message="", duration=None, **kw):
+        message_blob = Blob(message, self, **kw)
+        self.controller.messages.add(message_blob)
+        self.messages.add(message_blob)
+        if duration:
+            self.events.add(Event(duration * FRAME_DELAY, message_blob.kill, None))
+
+    def kill(self):
+        for message in self.messages:
+            message.kill()
+        return super(GameObject, self).kill()
 
 
 class Actor(GameObject):
@@ -646,7 +763,11 @@ class Animal0(Actor):
             other.strength = 6
             other.events.add(Event(5 * FRAME_DELAY, "blinking", False))
             other.events.add(Event(5 * FRAME_DELAY, "strength", 4))
-            self.kill()
+            if not self.messages:
+                message = u"Ble" + u"e" * random.randint(1, 3)
+                if random.randint(0, 4) == 0:
+                    message = u"I should be the killer rabbit of Kaernanog! Bleee! Be afraid!"
+                self.show_text(message, duration=2)
 
 def main(godmode):
     scene = Scene('scene0')
