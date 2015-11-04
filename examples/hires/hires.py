@@ -8,7 +8,7 @@ class ImageChanger(GameObject):
         if isinstance(other, Hero):
             if getattr(other, "_changer_image_name", None) != self.icon_name:
                 other._changer_image_name = self.icon_name
-                other.load_image(self.icon_name)
+                other.image_load(self.icon_name)
                 other.base_move_rate = self.move_rate
 
 class Ocean(ImageChanger):

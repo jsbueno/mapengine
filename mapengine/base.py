@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import logging
+import os
 
 import pygame
 
@@ -10,8 +11,8 @@ from pygame.sprite import Sprite, Group
 SIZE = 800, 600
 FRAME_DELAY = 30
 
-logger = logging
-logger.basicConfig()
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=getattr(logging, os.environ.get("LOGLEVEL", "INFO")))
 
 range = xrange
 
@@ -129,8 +130,6 @@ class Controller(object):
         pixel_left = scene.left * scene.blocksize
         pixel_top = scene.top * scene.blocksize
         self.screen.blit(scene.overlay_image, (0, 0), area=(pixel_left, pixel_top, self.width, self.height))
-        # if self.old_left != scene.left or self.old_top == scene.top:
-            # self.dirty_tiles = {}
 
     def _draw_overlay_tiles(self):
         scene = self.scene
@@ -264,6 +263,8 @@ class Scene(object):
         self.mapdescription = scene_name + ".gpl"
         self.overlay_image = None
 
+        self.cached_images = {}
+
         # TODO: factor this out to a mixin "autoattr" class
         for line in self.attributes.split("\n"):
             line = line.strip("\x20\x09,")
@@ -295,16 +296,33 @@ class Scene(object):
                 default = None
         setattr(self, attrname, kw.get(attrname, default))
 
-    def image_load(self, sufix="", extension="png"):
-        img = pygame.image.load("{}{}{}.{}".format(self.scene_path_prefix, self.mapfile, sufix, extension))
+
+    def image_load(self, filename=None, prefix=None, sufix="", extension="png", default=None, force=False):
+        if not filename:
+            filename = self.mapfile
+        if not prefix:
+            # TODO: user a set of prefixes, starting by the callign module/scenes and
+            # cwd/scenes
+            prefix = self.scene_path_prefix
+        path = "{}{}{}.{}".format(prefix, filename, sufix, extension)
+        if path in self.cached_images and not force:
+            logger.debug("Using cached image for '{}'".format(path))
+            return self.cached_images[path]
+        try:
+            logger.debug("Loading image at '{}'".format(path))
+            img = pygame.image.load(path)
+        except (pygame.error, IOError):
+            img = default
+            if force:
+                logger.error("Failed to laod image at '{}'".format(path))
+        self.cached_images[path] = img
         return img
 
     def load(self):
-        self.image = self.image_load()
-        try:
-            self.actor_plane = self.image_load(self.actor_plane_sufix)
-        except (pygame.error, IOError):
-            self.actor_plane = pygame.surface.Surface((1, 1))
+        self.image = self.image_load(force=True)
+        empty_plane = pygame.surface.Surface((1, 1))
+        self.actor_plane = self.image_load(sufix=self.actor_plane_sufix, default=empty_plane)
+        if self.actor_plane is empty_plane:
             logger.error("Could not find character plane for scene {}".format(self.scene_name))
         self.palette = Palette(self.scene_path_prefix + self.mapdescription)
         self.width, self.height = self.image.get_size()
@@ -314,7 +332,7 @@ class Scene(object):
 
         if self.display_type == "overlay":
             try:
-                overlay_image = self.image_load(self.overlay_plane_sufix)
+                overlay_image = self.image_load(sufix=self.overlay_plane_sufix)
                 ratio =  float(self.width * self.blocksize) / overlay_image.get_width()
                 # TODO: this image can become too large for big maps
                 # make use of a lazy-zooming mechanism to scale the overlay to full-size
@@ -350,9 +368,9 @@ class Scene(object):
         if name.lower() in GameObjectClasses:
             self.tiles[name] = GameObjectClasses[name.lower()]
             return self.tiles[name](self.controller, position)
-        try:
-            img = pygame.image.load(self.scene_path_prefix + name + ".png")
-        except (pygame.error, IOError):
+
+        img = self.image_load(name)
+        if img is None:
             self.tiles[name] = color
         else:
             if img.get_width() != self.blocksize:
@@ -441,20 +459,18 @@ class GameObject(Sprite):
     def __init__(self, controller, pos=(0,0)):
         self.controller = controller
         self.pos = pos
-        self.load_image(self.__class__.__name__.lower())
+        self.image_load(self.__class__.__name__.lower())
         self.events = set()
         self.tick = 0
         super(GameObject, self).__init__()
         self.update()
 
-    def load_image(self, name):
+    def image_load(self, name):
         controller = self.controller
         img_size = controller.scene.blocksize
         # TODO: allow for more sofisticated image loading - for animations.
-        self.image_path = "{}{}.{}".format(controller.scene.scene_path_prefix, name, "png")
-        try:
-            img = pygame.image.load(self.image_path)
-        except (IOError, pygame.error):
+        img = controller.scene.image_load(name)
+        if not img:
             color = controller.scene.palette[self.__class__.__name__]
             img = pygame.Surface((img_size, img_size))
             img.fill(color)
