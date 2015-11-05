@@ -663,6 +663,12 @@ class Actor(GameObject):
         super(Actor, self).update()
         self.move_counter += 1
 
+    def on_fire(self):
+        """"
+        Called if this is the main character and the fire key
+        (usually <space>) has been pressed.
+        """
+        pass
 
 class FallingActor(Actor):
     """
@@ -694,13 +700,17 @@ def simpleloop(scene, size, godmode=False):
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
                 raise GameOver
+            main_character = cont.main_character.sprites()[0]
             for direction_name in "RIGHT LEFT UP DOWN".split():
                 if keys[getattr(pygame, "K_" + direction_name)]:
                     direction = getattr(Directions, direction_name)
                     if godmode:
                         scene.move(direction)
                     else:
-                        cont.main_character.sprites()[0].move(direction)
+                        main_character.move(direction)
+                if keys[pygame.K_SPACE] and not godmode:
+                    main_character.on_fire()
+
 
     except GameOver:
         # cont.scene = EndGameScene()
@@ -728,6 +738,8 @@ class Wood(GameObject):
 
 
 class Hero(Actor):  # Try inheriting from FallingActor for Platform games
+    # This attributes defines for the contrller the character around which the
+    # map is scrolled
     main_character = True
 
     margin = 2
