@@ -575,8 +575,8 @@ class GameObject(Sprite):
             color = controller.scene.palette[self.__class__.__name__]
             img = pygame.Surface((img_size, img_size))
             img.fill(color)
-        if img_size != img.get_width():
-            ratio = float(img_size) / img.get_width()
+        if img_size != max(img.get_size()):
+            ratio = float(img_size) / max(img.get_size())
             img = pygame.transform.rotozoom(img, 0, ratio)
         self.base_image = img
         self.image = img
