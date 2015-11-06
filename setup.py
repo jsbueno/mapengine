@@ -7,7 +7,7 @@ from setuptools import setup
 
 setup(
     name = "mapengine",
-    version = "0.1a",
+    version = "0.3a",
     packages = ["mapengine"],
     # install_requires=["pygame>=1.8"], # TODO: check how to work around current
     # unavailability of pygame through pip install

@@ -38,4 +38,14 @@ have to manually copy the file from, for example, ~/.GIMP/2.0/palettes to
 the scenes folder)
 
 
-
+-------------
+TODO
+------------
+Main missing things: 
+  -  animation support: support for some kind of animation though game sprites
+  -  sound support: there is no sound integration whatever
+  -  fully working examples for action and RPG game
+  -  Smooth movements: this is mostly a ' very nice to have' - currently all objects
+  only move one block at a time. It could break things when implemented.
+  -  Nice support for opening/game over screens/leather board/between phases splash
+  

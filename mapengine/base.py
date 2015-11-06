@@ -10,6 +10,8 @@ import pygame
 from pygame.color import Color
 from pygame.sprite import Sprite, Group
 
+from .palette import Palette
+
 SIZE = 800, 600
 FRAME_DELAY = 30
 
@@ -199,55 +201,6 @@ class Controller(object):
 
     def quit(self):
         pygame.quit()
-
-
-class Palette(object):
-    """
-    Loads a GIMP Palette file (.gpl) and keeps its
-    data in an appropriate form for use of the rest of the application
-    """
-    def __init__(self, path):
-        self.path = path
-        self.colors = {}
-        self.color_names = {}
-        self.by_index = {}
-        self.load()
-
-    def __getitem__(self, key):
-        if isinstance(key, str):
-            return self.color_names[key.lower()]
-        elif isinstance(key, int):
-            if key < 0:
-                key = len(self.by_index) + key
-            return self.by_index[key]
-        if isinstance(key, Color):
-            key = tuple(key)
-        if len(key) == 3:
-            key = key + (255,)
-        return self.colors[key]
-
-    def __len__(self):
-        return len(self.colors)
-
-    def __repr__(self):
-        return '<Palette {!r}>'.format(self.color_names)
-
-    def load(self):
-        with open(self.path) as file_:
-            line = ""
-            while not line.strip().startswith('#'):
-                line = next(file_)
-            index = 0
-            for line in file_:
-                line = line.strip()
-                if len(line.split()) < 4 or line.startswith('#'):
-                    continue
-                r, g, b, name = line.strip().split(None, 4)
-                color = Color(*(int(component) for component in (r, g, b)))
-                self.colors[tuple(color)] = name.lower()
-                self.color_names[name.lower()] = color
-                self.by_index[index] = color
-                index += 1
 
 
 class Scene(object):
@@ -780,16 +733,3 @@ class Animal0(Actor):
                 if random.randint(0, 4) == 0:
                     message = u"I should be the killer rabbit of Kaernanog! Bleee! Be afraid!"
                 self.show_text(message, duration=2)
-
-def main(godmode):
-    scene = Scene('scene0')
-    simpleloop(scene, SIZE)
-
-
-if __name__ == "__main__":
-    import sys
-    godmode = (sys.argv[1] == "--godmode") if len(sys.argv) >= 2 else False
-    if godmode:
-        del Hero.update
-    main(godmode)
-
