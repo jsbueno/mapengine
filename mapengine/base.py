@@ -1,16 +1,20 @@
 # coding: utf-8
 
+from copy import copy
 import logging
 import os
 import random
 import textwrap
+import sys
 
 import pygame
 
 from pygame.color import Color
 from pygame.sprite import Sprite, Group
 
+from .utils import resource_load, pwd
 from .palette import Palette
+
 
 SIZE = 800, 600
 FRAME_DELAY = 30
@@ -25,6 +29,20 @@ class Directions(object):
     RIGHT, LEFT, UP, DOWN = (1, 0), (-1, 0), (0, -1), (0, 1)
 
 PAUSE = (0,0)
+
+SCENE_PATH = [pwd() + '/scenes']
+
+
+def add_scene_path(path):
+    """
+    Use this to explicitly add a directory to the
+    scene loading machinism.
+    If you don't add a path explictly, mapengine tries to guess
+    a "scenes/" directory from your working dir. But
+    the mechanisms for it may not work that well.
+    """
+    self.SCENE_PATH.append(path)
+
 
 class GameOver(Exception):
     pass
@@ -251,6 +269,8 @@ class Scene(object):
             value = value.split("#")[0].strip()
             self.load_attr(attr, value, kw)
 
+        SCENE_PATH.append(os.path.join(pwd(2), self.scene_path_prefix))
+
 
     def set_controller(self, controller):
         # Called when scene is first passed to a controller object
@@ -273,27 +293,12 @@ class Scene(object):
                 default = None
         setattr(self, attrname, kw.get(attrname, default))
 
-
-    def image_load(self, filename=None, prefix=None, sufix="", extension="png", default=None, force=False):
+    def image_load(self, filename=None, sufix="", **kw):
         if not filename:
             filename = self.mapfile
-        if not prefix:
-            # TODO: user a set of prefixes, starting by the callign module/scenes and
-            # cwd/scenes
-            prefix = self.scene_path_prefix
-        path = "{}{}{}.{}".format(prefix, filename, sufix, extension)
-        if path in self.cached_images and not force:
-            logger.debug("Using cached image for '{}'".format(path))
-            return self.cached_images[path]
-        try:
-            logger.debug("Loading image at '{}'".format(path))
-            img = pygame.image.load(path)
-        except (pygame.error, IOError):
-            img = default
-            if force:
-                logger.error("Failed to laod image at '{}'".format(path))
-        self.cached_images[path] = img
-        return img
+        if not filename.lower().endswith((".png", ".bmp", ".tif", ".tiff")):
+            filename += sufix + ".png"
+        return resource_load(filename, paths=SCENE_PATH, cache=self.cached_images, loader=pygame.image.load, **kw)
 
     def load(self):
         self.image = self.image_load(force=True)
@@ -301,7 +306,8 @@ class Scene(object):
         self.actor_plane = self.image_load(sufix=self.actor_plane_sufix, default=empty_plane)
         if self.actor_plane is empty_plane:
             logger.error("Could not find character plane for scene {}".format(self.scene_name))
-        self.palette = Palette(self.scene_path_prefix + self.mapdescription)
+        self.palette = resource_load(self.mapdescription, paths=SCENE_PATH, loader=Palette)
+        #Palette(self.mapdescription)
         self.width, self.height = self.image.get_size()
 
         # Scene blocksize in pixels:
@@ -442,9 +448,11 @@ class Blob(Sprite):
                  timeout=None, font="sans.ttf", size=16, bold=True, **kw):
         self.message = message
         self.width = width
+        # TODO: refactor the logistic to find image files used in Scenes
+        # to find fonts
         path = self.font_prefix + font
         if not path in self.font_cache:
-            self.font_cache[path] = pygame.font.Font("fonts/" + font, size)
+            self.font_cache[path] = pygame.font.Font(pwd() + "/fonts/" + font, size)
         self.font = self.font_cache[path]
         self.font.set_bold(bold)
         self.color = kw.get("color", (255,255,255))
