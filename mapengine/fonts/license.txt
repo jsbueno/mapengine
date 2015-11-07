@@ -1,0 +1,1 @@
+'sans.ttf' font is a font distributed with Pygame and under that project's license (GPL v 2.1)
