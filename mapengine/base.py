@@ -445,15 +445,14 @@ class Blob(Sprite):
     font_prefix = "fonts/"
     def __init__(self, message,
                  owner, width=TEXT_WIDTH,
-                 timeout=None, font="sans.ttf", size=16, bold=True, **kw):
+                 timeout=None, font_file_name="sans.ttf", size=16, bold=True, **kw):
         self.message = message
         self.width = width
+        self.size = size
         # TODO: refactor the logistic to find image files used in Scenes
         # to find fonts
-        path = self.font_prefix + font
-        if not path in self.font_cache:
-            self.font_cache[path] = pygame.font.Font(pwd() + "/fonts/" + font, size)
-        self.font = self.font_cache[path]
+        paths = [os.path.join(path.rstrip("/").rsplit("/",1)[0], self.font_prefix) for path in SCENE_PATH]
+        self.font = resource_load(font_file_name, paths=paths, cache=self.font_cache, loader=self.loader)
         self.font.set_bold(bold)
         self.color = kw.get("color", (255,255,255))
         self.margin = kw.get("margin", 30)
@@ -469,6 +468,9 @@ class Blob(Sprite):
         self.rendered_message = None
 
         super(Blob, self).__init__()
+
+    def loader(self, path):
+        return pygame.font.Font(path, self.size)
 
     def render(self):
         if self.rendered_message == self.message:
@@ -631,6 +633,7 @@ class Actor(GameObject):
         """
         pass
 
+
 class FallingActor(Actor):
     """
     Use this class for side-view games, where things "fall" if there is no ground bellow them
@@ -721,8 +724,6 @@ class Wood(GameObject):
 
 class Hero(MainActor):
     pass
-
-
 
 
 class Animal0(Actor):
