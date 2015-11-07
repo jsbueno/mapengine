@@ -679,6 +679,27 @@ def simpleloop(scene, size, godmode=False):
     finally:
         cont.quit()
 
+class MainActor(Actor):
+    # This attributes defines for the controller the character around which the
+    # map is scrolled
+    #  (Try inheriting from FallingActor for Platform games)
+    main_character = True
+
+    margin = 2
+
+    def update(self):
+        super(MainActor, self).update()
+
+        if self.pos[0] <= self.controller.scene.left + self.margin:
+            self.controller.scene.target_left = self.pos[0] - self.margin
+        elif self.pos[0] > (self.controller.scene.left + self.controller.blocks_x - self.margin - 1):
+            self.controller.scene.target_left = self.pos[0] - self.controller.blocks_x + self.margin + 1
+
+        if self.pos[1] <= self.controller.scene.top + self.margin:
+            self.controller.scene.target_top = self.pos[1] - self.margin
+        elif (self.pos[1] > self.controller.scene.top + self.controller.blocks_y - self.margin - 1):
+            self.controller.scene.target_top = self.pos[1] - self.controller.blocks_y + self.margin + 1
+
 ####
 # From here on, it should be only example and testing code -
 # but some refactoring is probably needed
@@ -698,25 +719,9 @@ class Wood(GameObject):
         other.events.add(Event(5 * FRAME_DELAY, "strength", 4))
 
 
-class Hero(Actor):  # Try inheriting from FallingActor for Platform games
-    # This attributes defines for the contrller the character around which the
-    # map is scrolled
-    main_character = True
+class Hero(MainActor):
+    pass
 
-    margin = 2
-
-    def update(self):
-        super(Hero, self).update()
-
-        if self.pos[0] <= self.controller.scene.left + self.margin:
-            self.controller.scene.target_left = self.pos[0] - self.margin
-        elif self.pos[0] > (self.controller.scene.left + self.controller.blocks_x - self.margin - 1):
-            self.controller.scene.target_left = self.pos[0] - self.controller.blocks_x + self.margin + 1
-
-        if self.pos[1] <= self.controller.scene.top + self.margin:
-            self.controller.scene.target_top = self.pos[1] - self.margin
-        elif (self.pos[1] > self.controller.scene.top + self.controller.blocks_y - self.margin - 1):
-            self.controller.scene.target_top = self.pos[1] - self.controller.blocks_y + self.margin + 1
 
 
 

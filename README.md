@@ -48,4 +48,8 @@ Main missing things:
   -  Smooth movements: this is mostly a ' very nice to have' - currently all objects
   only move one block at a time. It could break things when implemented.
   -  Nice support for opening/game over screens/leather board/between phases splash
-  
+
+Wishlist:
+
+  - Add support for zip and egg files (including the resources, allowing entire games to be distributted as a single file)
+  - "super blocks" Game Objetcs comprised by more than one contiguous game block, (displaying a bigger image, and behavinfgg accordingly)

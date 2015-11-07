@@ -36,7 +36,6 @@ def resource_load(filename, paths=None, cache=None, prefix=None, default=None, f
             logger.debug("Using cached resource for '{}'".format(path))
             return cache[path]
         if os.path.exists(path):
-            print "ugh - ", path
             break
     try:
         logger.debug("Loading resource at '{}'".format(path))
