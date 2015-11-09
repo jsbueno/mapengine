@@ -519,6 +519,8 @@ class GameObject(Sprite):
     __metaclass__ = GameObjectRegistry
 
     hardness = 0
+    background_image = None
+
     def __init__(self, controller, pos=(0,0)):
         self.messages = Group()
         self.controller = controller
@@ -529,19 +531,25 @@ class GameObject(Sprite):
         super(GameObject, self).__init__()
         self.update()
 
-    def image_load(self, name):
-        controller = self.controller
-        img_size = controller.scene.blocksize
+    def raw_image_load(self, name):
         # TODO: allow for more sofisticated image loading - for animations.
-        img = controller.scene.image_load(name)
+        scene = self.controller.scene
+        img_size = scene.blocksize
+        img = scene.image_load(name)
         if not img:
-            color = controller.scene.palette[self.__class__.__name__]
+            color = scene.palette[self.__class__.__name__]
             img = pygame.Surface((img_size, img_size))
             img.fill(color)
         if img_size != max(img.get_size()):
             ratio = float(img_size) / max(img.get_size())
             img = pygame.transform.rotozoom(img, 0, ratio)
-        self.base_image = img
+        return img
+
+    def image_load(self, name):
+        self.base_image = img = self.raw_image_load(name)
+        if self.background_image:
+            img = self.raw_image_load(self.background_image)
+            img.blit(self.base_image, (0,0))
         self.image = img
 
     def update(self):
@@ -664,7 +672,7 @@ def simpleloop(scene, size, godmode=False):
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
                 raise GameOver
-            main_character = cont.main_character.sprites()[0]
+            main_character = (cont.main_character.sprites()[0]) if not godmode else None
             for direction_name in "RIGHT LEFT UP DOWN".split():
                 if keys[getattr(pygame, "K_" + direction_name)]:
                     direction = getattr(Directions, direction_name)
