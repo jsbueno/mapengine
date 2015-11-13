@@ -520,29 +520,43 @@ class GameObject(Sprite):
 
     hardness = 0
     background_image = None
+    image_sequence = None
+    image_cache = {}
+    base_image = image = None
 
     def __init__(self, controller, pos=(0,0)):
         self.messages = Group()
         self.controller = controller
         self.pos = pos
-        self.image_load(self.__class__.__name__.lower())
+        self.images = {}
+        if not self.image_sequence:
+            self.image_load(self.__class__.__name__.lower())
+        else:
+            self.auto_image_sequence_load(self.image_sequence)
         self.events = set()
         self.tick = 0
         super(GameObject, self).__init__()
+        self.move_direction = Directions.RIGHT
+        self.move_direction_count = 0
+        self.speed = 0
         self.update()
 
-    def raw_image_load(self, name):
-        # TODO: allow for more sofisticated image loading - for animations.
+    def _resize(self, img):
+        img_size = self.controller.scene.blocksize
+        ratio = float(img_size) / max(img.get_size())
+        img = pygame.transform.rotozoom(img, 0, ratio)
+        return img
+
+    def raw_image_load(self, name, resize=True):
         scene = self.controller.scene
         img_size = scene.blocksize
         img = scene.image_load(name)
         if not img:
             color = scene.palette[self.__class__.__name__]
-            img = pygame.Surface((img_size, img_size))
+            img = pygame.Surface((img_size, img_size), pygame.SRCALPHA)
             img.fill(color)
-        if img_size != max(img.get_size()):
-            ratio = float(img_size) / max(img.get_size())
-            img = pygame.transform.rotozoom(img, 0, ratio)
+        if resize and img_size != max(img.get_size()):
+            img = self._resize(img)
         return img
 
     def image_load(self, name):
@@ -552,13 +566,67 @@ class GameObject(Sprite):
             img.blit(self.base_image, (0,0))
         self.image = img
 
+    def image_sequence_load(self, image_sequence, resize=True):
+        if image_sequence in self.__class__.image_cache:
+            return self.__class__.image_cache[image_sequence]
+        filename = image_sequence[0]
+        img = self.raw_image_load(filename, resize=False)
+        width = image_sequence[1]
+        height = image_sequence[2] if len(image_sequence) > 2 else img.get_height()
+
+        imgs = []
+        for offset_y in range(0, img.get_height(), height):
+            strip = []
+            for offset_x in range(0, img.get_width(), width):
+                new_img = pygame.Surface((width, height), pygame.SRCALPHA)
+                new_img.blit(img, (0, 0), (offset_x, offset_y, width, height))
+                if resize:
+                    new_img = self._resize(new_img)
+                strip.append(new_img)
+            imgs.append(strip)
+        self.__class__.image_cache[image_sequence] = imgs
+        return imgs
+
+
+    def auto_image_sequence_load(self, file_sequence, name=""):
+        """ Load several images as animation sequences. 
+        The format of the "image_sequence" attribute is a work in progress:
+        you can pass a sequence of an image-file name followed by one or two numbers, meaning
+        the width [and height] of each sprite on the image. 
+        From one set of images, images will be created for characters facing left or right - 
+        for two given sets: the first set is used for left, right and down, and the second for up.
+        with three sets: left, and right, then up, then down
+
+        Called automatically if the class "image_sequence" is set.
+
+        The given file_sequence is stored in self.images[<key>]  where <key> is 
+        <right/left/up/down>[_name]
+        (ex. "right_jump")
+        """
+        if 2 <= len(file_sequence) <= 3 and isinstance(file_sequence[0], str):
+            file_sequence = [file_sequence]
+        sequences = []
+        for part in file_sequence:
+            sequences.extend(self.image_sequence_load(tuple(part)))
+        key_base = "{{}}_{}".format(name) if name else "{}"
+        right_images = self.images[key_base.format("right")] = sequences[0]
+        left_images = self.images[key_base.format("left")] = [pygame.transform.flip(img, True, False) for img in sequences[0]]
+
+        self.images[key_base.format("up")] = sequences[1] if len(sequences) > 1 else right_images
+        self.images[key_base.format("down")] = sequences[2] if len(sequences) > 2 else left_images
+
+
     def update(self):
-        super(GameObject, self).update()
         self.process_events()
         bl = self.controller.scene.blocksize
         # location rectangle, in pixels, relative to the scene (not the screen)
         self.rect = pygame.Rect([self.pos[0] * bl, self.pos[1] * bl, bl, bl])
         self.tick += 1
+        # TODO: 
+        if self.images:
+            self.base_image = self.images["right"][0]# load self.image according to self.move_direction, self.move_direction_count, self.speed
+            self.image = self.base_image
+        return super(GameObject, self).update()
 
     def process_events(self):
         for event in list(self.events):

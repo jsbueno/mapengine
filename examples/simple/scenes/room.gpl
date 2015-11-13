@@ -2,3 +2,4 @@
 0 0 0 wall
 255 255 255 background
 255 0 0 ground
+255 255 0 SimpleActor
