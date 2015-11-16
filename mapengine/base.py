@@ -24,11 +24,60 @@ logging.basicConfig(level=getattr(logging, os.environ.get("LOGLEVEL", "INFO")))
 
 range = xrange
 
+class Vector(object):
+    def __init__(self, pos):
+        self.x = pos[0]
+        self.y = pos[1]
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, index):
+        if index==0:
+            return self.x
+        if index==1:
+            return self.y
+        raise IndexError
+
+    def __setitem__(self, index, value):
+        if index == 0:
+            self.x = value
+        elif index == 1:
+            self.y == value
+        else:
+            raise IndexError
+
+    def __add__(self, other):
+        return Vector((self.x + other[0], self.y + other[1]))
+
+    def __sub__(self, other):
+        return Vector((self.x - other[0], self.y - other[1]))
+
+    def __mul__(self, other):
+        return Vector((self.x * other, self.y * other))
+
+    def __div__(self, other):
+        return Vector((self.x // other, self.y // other))
+
+    def __truediv__(self, other):
+        return Vector((self.x / float(other), self.y / float(other)))
+
+    def distance(self, other):
+        return ((self.x - other[0]) ** 2, (self.y - other[1]) ** 2) ** 0.5
+
+    def __repr__(self):
+        return "Vector(({:g},{:g}))".format(self.x, self.y)
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+V=Vector
+
 class Directions(object):
     # TODO: create some simple const type with a nice REPR
-    RIGHT, LEFT, UP, DOWN = (1, 0), (-1, 0), (0, -1), (0, 1)
+    RIGHT, LEFT, UP, DOWN = V((1, 0)), V((-1, 0)), V((0, -1)), V((0, 1))
 
-PAUSE = (0,0)
+PAUSE = V((0,0))
 
 SCENE_PATH = [pwd() + '/scenes']
 
@@ -449,8 +498,6 @@ class Blob(Sprite):
         self.message = message
         self.width = width
         self.size = size
-        # TODO: refactor the logistic to find image files used in Scenes
-        # to find fonts
         paths = [os.path.join(path.rstrip("/").rsplit("/",1)[0], self.font_prefix) for path in SCENE_PATH]
         self.font = resource_load(font_file_name, paths=paths, cache=self.font_cache, loader=self.loader)
         self.font.set_bold(bold)
@@ -527,7 +574,7 @@ class GameObject(Sprite):
     def __init__(self, controller, pos=(0,0)):
         self.messages = Group()
         self.controller = controller
-        self.pos = pos
+        self.pos = V(pos)
         self.images = {}
         if not self.image_sequence:
             self.image_load(self.__class__.__name__.lower())
@@ -683,15 +730,13 @@ class Actor(GameObject):
     def move(self, direction):
         if self.move_counter < self.base_move_rate:
             return
-        # TODO: implement a simple class for vector algebra like this
-        x, y = self.pos
-        x += direction[0]
-        y += direction[1]
-        if isinstance(self.controller[x, y] , GameObject):
-            self.controller[x,y].on_touch(self)
-        if getattr(self.controller[x, y], "hardness", 0) > self.strength:
+        new_pos = self.pos + direction
+        other_obj = self.controller[new_pos]
+        if isinstance(other_obj , GameObject):
+            self.controller[new_pos].on_touch(self)
+        if getattr(other_obj, "hardness", 0) > self.strength:
             return
-        self.pos = x, y
+        self.pos = new_pos
         self.move_counter = 0
 
     def update(self):
