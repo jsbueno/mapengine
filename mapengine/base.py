@@ -73,9 +73,23 @@ class Vector(object):
 
 V=Vector
 
-class Directions(object):
+class CDirections(object):
     # TODO: create some simple const type with a nice REPR
     RIGHT, LEFT, UP, DOWN = V((1, 0)), V((-1, 0)), V((0, -1)), V((0, 1))
+    def __getitem__(self, d):
+        if d == self.RIGHT:
+            v = "right"
+        elif d == self.LEFT:
+            v = "left"
+        elif d == self.UP:
+            v = "up"
+        elif d == self.DOWN:
+            v = "down"
+        else:
+            raise IndexError
+        return v
+
+Directions = CDirections()
 
 PAUSE = V((0,0))
 
@@ -669,9 +683,17 @@ class GameObject(Sprite):
         # location rectangle, in pixels, relative to the scene (not the screen)
         self.rect = pygame.Rect([self.pos[0] * bl, self.pos[1] * bl, bl, bl])
         self.tick += 1
-        # TODO: 
         if self.images:
-            self.base_image = self.images["right"][0]# load self.image according to self.move_direction, self.move_direction_count, self.speed
+            direction_str = Directions[self.move_direction]
+            moving_time = self.tick - self.move_direction_count
+            if moving_time > 1.5 * self.base_move_rate:
+               self.speed = 0
+            if not self.speed:
+                self.base_image = self.images[direction_str][0]
+            else:
+                index =  (moving_time) % (len(self.images[direction_str]) - 1)
+                self.base_image = self.images[direction_str][1 + index]
+            # For now, the reason to have "image" and "base_image" is the blinking attribute
             self.image = self.base_image
         return super(GameObject, self).update()
 
@@ -731,6 +753,9 @@ class Actor(GameObject):
         if self.move_counter < self.base_move_rate:
             return
         new_pos = self.pos + direction
+        self.move_direction = direction
+        self.move_direction_count = self.tick
+        self.speed = 1.0 / self.base_move_rate 
         other_obj = self.controller[new_pos]
         if isinstance(other_obj , GameObject):
             self.controller[new_pos].on_touch(self)
@@ -848,7 +873,7 @@ class Hero(MainActor):
 
 
 class Animal0(Actor):
-    locals().update(Directions.__dict__)
+    locals().update(CDirections.__dict__)
     pattern = [RIGHT, RIGHT, RIGHT, PAUSE, LEFT, LEFT, LEFT, PAUSE]
     move_rate = 12
 
