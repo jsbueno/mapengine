@@ -597,9 +597,15 @@ class GameObject(Sprite):
 
     hardness = 0
     background_image = None
-    image_sequence = None
+    image_sequence = None # Image sequence can be a tuple of filename + sprite_width. 
+                          # the file is loaded and cut in squarres of sprite_width pixels - 
+                          # with up to 3 rows. First row is mirrored left/right
+                          # following rows are used for up/down. First sprite
+                          # in each row is used for stopped character - others
+                          # are used by character when in movement
     image_cache = {}
     base_image = image = None
+    auto_flip = False
 
     def __init__(self, controller, pos=(0,0)):
         self.messages = Group()
@@ -638,6 +644,9 @@ class GameObject(Sprite):
 
     def image_load(self, name):
         self.base_image = img = self.raw_image_load(name)
+        if self.auto_flip:
+            self.images["up"] = self.images["right"] = [img]
+            self.images["down"] = self.images["left"] = [pygame.transform.flip(img, True, False)]
         if self.background_image:
             img = self.raw_image_load(self.background_image)
             img.blit(self.base_image, (0,0))
@@ -700,11 +709,14 @@ class GameObject(Sprite):
         self.rect = pygame.Rect([self.pos[0] * bl, self.pos[1] * bl, bl, bl])
         self.tick += 1
         if self.images:
-            direction_str = Directions[self.move_direction]
+            try:
+                direction_str = Directions[self.move_direction]
+            except IndexError:
+                return super(GameObject, self).update()
             moving_time = self.tick - self.move_direction_count
             if moving_time > 1.5 * self.base_move_rate:
                self.speed = 0
-            if not self.speed:
+            if not self.speed or len(self.images[direction_str]) == 1:
                 self.base_image = self.images[direction_str][0]
             else:
                 index =  (moving_time  // self.base_move_rate) % (len(self.images[direction_str]) - 1)
@@ -758,6 +770,7 @@ class Actor(GameObject):
     strength = 4
     base_move_rate = 4
     blinking = False
+    auto_flip = True
 
     def __init__(self, *args, **kw):
         # self.pos = kw.pop("pos", (0,0))
@@ -782,11 +795,11 @@ class Actor(GameObject):
         self.move_counter = 0
 
     def update(self):
+        super(Actor, self).update()
         if self.blinking and self.tick % 2:
             self.image = None
         else:
             self.image = self.base_image
-        super(Actor, self).update()
         self.move_counter += 1
 
     def on_fire(self):
