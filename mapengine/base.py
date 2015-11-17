@@ -25,6 +25,8 @@ logging.basicConfig(level=getattr(logging, os.environ.get("LOGLEVEL", "INFO")))
 range = xrange
 
 class Vector(object):
+    __slots__ = ["x", "y"]
+
     def __init__(self, pos):
         self.x = pos[0]
         self.y = pos[1]
@@ -46,6 +48,9 @@ class Vector(object):
             self.y == value
         else:
             raise IndexError
+
+    def __eq__(self, other):
+        return self.x == other[0] and self.y == other[1]
 
     def __add__(self, other):
         return Vector((self.x + other[0], self.y + other[1]))
@@ -239,7 +244,7 @@ class Controller(object):
                 self.scene.top <= pos[1] < self.scene.top + self.blocks_y)
 
     def to_screen(self, pos):
-        return pos[0] - self.scene.left, pos[1] - self.scene.top
+        return V((pos[0] - self.scene.left, pos[1] - self.scene.top))
 
     def draw_actors(self):
         scale = self.scene.blocksize
@@ -251,9 +256,20 @@ class Controller(object):
                 continue
             if not actor.image:
                 continue
-            x, y = self.to_screen(actor.pos)
+            x, y = pos = self.to_screen(actor.pos)
+            if actor.speed:
+                # import ipdb; ipdb.set_trace()
+                old_pos = self.to_screen(actor.old_pos)
+                ipos = old_pos + (pos - old_pos) * actor.speed * min((actor.tick - actor.move_direction_count), actor.base_move_rate)
+                x, y = ipos
+                self.dirty_tiles[old_pos] = True
+                self.dirty_tiles[pos] = True
+                self.dirty_tiles[V((old_pos.x, pos.y))] = True
+                self.dirty_tiles[V((pos.x, old_pos.y))] = True
+            else:
+                self.dirty_tiles[pos] = True
             self.screen.blit(actor.image, (x * scale, y * scale))
-            self.dirty_tiles[x, y] = True
+
 
     def display_messages(self):
         scale = self.scene.blocksize
@@ -588,7 +604,7 @@ class GameObject(Sprite):
     def __init__(self, controller, pos=(0,0)):
         self.messages = Group()
         self.controller = controller
-        self.pos = V(pos)
+        self.old_pos = self.pos = V(pos)
         self.images = {}
         if not self.image_sequence:
             self.image_load(self.__class__.__name__.lower())
@@ -691,7 +707,7 @@ class GameObject(Sprite):
             if not self.speed:
                 self.base_image = self.images[direction_str][0]
             else:
-                index =  (moving_time) % (len(self.images[direction_str]) - 1)
+                index =  (moving_time  // self.base_move_rate) % (len(self.images[direction_str]) - 1)
                 self.base_image = self.images[direction_str][1 + index]
             # For now, the reason to have "image" and "base_image" is the blinking attribute
             self.image = self.base_image
@@ -752,6 +768,7 @@ class Actor(GameObject):
     def move(self, direction):
         if self.move_counter < self.base_move_rate:
             return
+        self.old_pos = self.pos
         new_pos = self.pos + direction
         self.move_direction = direction
         self.move_direction_count = self.tick
