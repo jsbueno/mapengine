@@ -132,6 +132,10 @@ class Controller(object):
         self.old_tiles = {}
         self.dirty_tiles = {}
         self.force_redraw = False
+        # This dict is where the game should keep
+        # character and story data that persist across phaes,
+        # like lifes, energy, inventory, encounters that happened, etc:
+        self.diary = {}
 
     def load_scene(self, scene):
         self.scene = scene
@@ -167,8 +171,9 @@ class Controller(object):
 
     def update(self):
         self.scene.update()
-        self.all_actors.update()
         for actor in self.all_actors:
+            if actor.off_screen_update or self.is_position_on_screen(actor.pos):
+                actor.update()
             for collision in pygame.sprite.spritecollide(actor, self.all_actors, False, collided=self._touch):
                 actor.on_over(collision)
             if isinstance(self.scene[actor.pos], GameObject):
@@ -609,6 +614,7 @@ class GameObject(Sprite):
     image_cache = {}
     base_image = image = None
     auto_flip = False
+    off_screen_update = False
 
     def __init__(self, controller, pos=(0,0)):
         self.messages = Group()
