@@ -55,6 +55,9 @@ class Vector(object):
     def __add__(self, other):
         return Vector((self.x + other[0], self.y + other[1]))
 
+    def __radd__(self, other):
+        return Vector((self.x + other[0], self.y + other[1]))
+
     def __sub__(self, other):
         return Vector((self.x - other[0], self.y - other[1]))
 
