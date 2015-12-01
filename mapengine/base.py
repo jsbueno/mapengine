@@ -523,23 +523,34 @@ class Event(object):
 
 TEXT_WIDTH = 20
 
-
-class Blob(Sprite):
-    """
-    On screen text message blob
-    """
+class FontLoader(object):
     font_cache = {}
+
     font_prefix = "fonts/"
-    def __init__(self, message,
-                 owner, width=TEXT_WIDTH,
-                 timeout=None, font_file_name="sans.ttf", size=16, bold=True, **kw):
-        self.message = message
-        self.width = width
+    def __init__(self, font_file_name="sans.ttf", size=16, bold=True, **kw):
         self.size = size
         paths = [os.path.join(path.rstrip("/").rsplit("/",1)[0], self.font_prefix) for path in SCENE_PATH]
         self.font = resource_load(font_file_name, paths=paths, cache=self.font_cache, loader=self.loader)
         self.font.set_bold(bold)
         self.color = kw.get("color", (255,255,255))
+        self.antialias = kw.get("antialias", True)
+
+    def loader(self, path):
+        return pygame.font.Font(path, self.size)
+
+
+class Blob(Sprite, FontLoader):
+    """
+    On screen text message blob
+    """
+
+    def __init__(self, message, owner, width=TEXT_WIDTH, timeout=None, *args, **kw):
+
+        self.timeout = timeout
+
+        self.width = width
+        self.owner = owner
+
         self.margin = kw.get("margin", 30)
         self.frame = kw.get("frame", 3) # 0 or None for no frame
         self.background = kw.get("background", (0, 0, 0, 172))
@@ -547,15 +558,14 @@ class Blob(Sprite):
         self.line_spacing = kw.get("line_spacing", 2)
         self.justification = kw.get("justification", "left") # left, right, center
         self.kwargs = kw
-
-        self.text_lines = message
+        self.message = self.text_lines = message
         self.owner = owner
         self.rendered_message = None
 
-        super(Blob, self).__init__()
-
-    def loader(self, path):
-        return pygame.font.Font(path, self.size)
+        # Pygame's Sprite can't graciously handle a "super" call. 
+        # So we call both superclasses' __init__
+        FontLoader.__init__(self, *args, **kw)
+        Sprite.__init__(self)
 
     def render(self):
         if self.rendered_message == self.message:
