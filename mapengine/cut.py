@@ -31,7 +31,7 @@ class Cut(object):
 
     def __call__(self, controller):
         self.current_title_font = FontLoader(*self.title_font)
-        self.current_options_font = FontLoader(*self.title_font)
+        self.current_options_font = FontLoader(*self.option_font)
         self.rendered_title = None
         self.rendered_options = []
         self.controller = controller
@@ -46,20 +46,22 @@ class Cut(object):
         if not self.rendered_title:
             self.rendered_title = self.current_title_font.render(self.title)
             for i, option in enumerate(self.options, 1):
-                self.rendered_options.append(self.current_options_font.render(self.options[0]))
+                self.rendered_options.append(self.current_options_font.render(u"{} - {}".format(i, option[0])))
 
-            # WIP: for now, cuts are static text - so no need to re-render at each frame
-            if isinstance(self.background, pygame.Surface):
-                screen.blit(self.background, (0,0))
-            else:
-                screen.fill(self.background)
-            offset_x = (screen.get_width() - self.rendered_title.get_width()) // 2
-            offset_y = y_step - self.rendered_title.get_height() // 2
-            screen.blit(self.rendered_title, (offset_x, offset_y))
-            for r_option, offset_y in zip(self.rendered_options, range(y_step * 2, screen.get_height(), y_step)):
-                offset_x = (screen.get_width() - r_option.get_width()) // 2
-                offset_y = offset_y - r_option.get_height() // 2
-                screen.blit(r_option, (offset_x, offset_y))
+        # WIP: for now, cuts are static text - so no need to re-render at each frame
+        # (but for now, we need to re-render at least once - so it is out of the above
+        # "if" block)
+        if isinstance(self.background, pygame.Surface):
+            screen.blit(self.background, (0,0))
+        else:
+            screen.fill(self.background)
+        offset_x = (screen.get_width() - self.rendered_title.get_width()) // 2
+        offset_y = y_step - self.rendered_title.get_height() // 2
+        screen.blit(self.rendered_title, (offset_x, offset_y))
+        for r_option, offset_y in zip(self.rendered_options, range(y_step * 2, screen.get_height(), y_step)):
+            offset_x = (screen.get_width() - r_option.get_width()) // 2
+            offset_y = offset_y - r_option.get_height() // 2
+            screen.blit(r_option, (offset_x, offset_y))
         pygame.display.flip()
 
         pygame.event.pump()
@@ -71,7 +73,7 @@ class Cut(object):
                 raise CutExit
         for i, option in enumerate(self.options, 1):
             # <esc> also triggers the first option
-            if keys[str(i)] or keys[K_ESCAPE]:
+            if keys[ord(str(i))] or keys[K_ESCAPE]:
                 option[1](self.controller)
                 # a pause to allow for menu navigation - 
                 # (the callable could change our options)

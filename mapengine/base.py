@@ -18,7 +18,7 @@ from .palette import Palette
 from .fonts import FontLoader
 from .cut import Cut
 from .global_states import SCENE_PATH
-from .exceptions import GameOver, CutExit
+from .exceptions import GameOver, CutExit, RestartGame
 
 SIZE = 800, 600
 FRAME_DELAY = 30
@@ -67,20 +67,27 @@ class Controller(object):
         pygame.init()
         self.width, self.height = self.size = size
         self.screen = pygame.display.set_mode(size, **kw)
-        self.actor_positions = {}
 
+        self.hard_reset()
+        self.load_scene(scene)
+
+    def hard_reset(self):
+        # This dict is where the game should keep
+        # character and story data that persist across phaes,
+        # like lifes, energy, inventory, encounters that happened, etc:
+
+        self.diary = {}
+        return self.soft_reset()
+
+    def soft_reset(self):
+        self.actor_positions = {}
         self.old_top = -20
         self.old_left = -20
         self.old_tiles = {}
         self.dirty_tiles = {}
         self.force_redraw = False
-        # This dict is where the game should keep
-        # character and story data that persist across phaes,
-        # like lifes, energy, inventory, encounters that happened, etc:
-        self.diary = {}
         self.inside_cut = False
         self.post_cut_action = None
-        self.load_scene(scene)
 
     def load_scene(self, scene, skip_post_cut=False, skip_pre_cut=False):
         if getattr(self, "scene", None) and self.scene.post_cut and not skip_post_cut:
@@ -257,7 +264,6 @@ class Controller(object):
                 self.dirty_tiles[pos] = True
             self.screen.blit(actor.image, (x * scale, y * scale))
 
-
     def display_messages(self):
         scale = self.scene.blocksize
         for message in self.messages:
@@ -352,7 +358,7 @@ class Scene(object):
 
     @staticmethod
     def default_game_over_continue(controller):
-        raise CutExit
+        raise RestartGame
 
     def set_controller(self, controller):
         # Called when scene is first passed to a controller object
@@ -600,6 +606,7 @@ class GameObject(Sprite):
                           # following rows are used for up/down. First sprite
                           # in each row is used for stopped character - others
                           # are used by character when in movement
+    image_name = None
     image_cache = {}
     base_image = image = None
     auto_flip = False
@@ -611,7 +618,7 @@ class GameObject(Sprite):
         self.old_pos = self.pos = V(pos)
         self.images = {}
         if not self.image_sequence:
-            self.image_load(self.__class__.__name__.lower())
+            self.image_load(self.image_name or self.__class__.__name__.lower())
         else:
             self.auto_image_sequence_load(self.image_sequence)
         self.events = set()
@@ -835,6 +842,8 @@ def simpleloop(scene, size, godmode=False):
                     frame_start = pygame.time.get_ticks()
                     pygame.event.pump()
                     controller.update()
+                    if controller.inside_cut:
+                        continue
                     pygame.display.flip()
                     delay = max(0, FRAME_DELAY - (pygame.time.get_ticks() - frame_start))
                     pygame.time.delay(delay)
@@ -856,8 +865,10 @@ def simpleloop(scene, size, godmode=False):
 
             except GameOver:
                 continue_ = False
-            except CutExit:
+            except RestartGame:
+                scene.top = scene.left = 0
                 controller.load_scene(scene)
+                controller.hard_reset()
 
     finally:
         controller.quit()
@@ -922,14 +933,18 @@ class Animal0(Actor):
 
     def on_over(self, other):
         if isinstance(other, Hero):
-            other.kill()
-            return
             other.blinking = True
             other.strength = 6
-            other.events.add(Event(5 * FRAME_DELAY, "blinking", False))
-            other.events.add(Event(5 * FRAME_DELAY, "strength", 4))
+            other.events.add(Event(10 * FRAME_DELAY, "blinking", False))
+            other.events.add(Event(10 * FRAME_DELAY, "strength", 4))
             if not self.messages:
                 message = u"Ble" + u"e" * random.randint(1, 3)
                 if random.randint(0, 4) == 0:
                     message = u"I should be the killer rabbit of Kaernanog! Bleee! Be afraid!"
                 self.show_text(message, duration=2)
+
+
+class Animal1(Animal0):
+    def on_over(self, other):
+        if isinstance(other, Hero):
+            other.kill()

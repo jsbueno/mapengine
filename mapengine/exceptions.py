@@ -6,5 +6,8 @@ class BaseGameException(Exception):
 class GameOver(BaseGameException):
     pass
 
+class RestartGame(BaseGameException):
+    pass
+
 class CutExit(BaseGameException):
     pass
