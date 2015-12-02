@@ -649,6 +649,8 @@ class GameObject(Sprite):
         self.move_direction = Directions.RIGHT
         self.move_direction_count = 0
         self.speed = 0
+        self.showing_text = False
+        self.message_queue = []
         self.update()
 
     def _resize(self, img):
@@ -750,6 +752,8 @@ class GameObject(Sprite):
                 self.base_image = self.images[direction_str][1 + index]
             # For now, the reason to have "image" and "base_image" is the blinking attribute
             self.image = self.base_image
+        if self.message_queue:
+            self.show_text()
         return super(GameObject, self).update()
 
     def process_events(self):
@@ -779,12 +783,27 @@ class GameObject(Sprite):
         """
         pass
 
+    def on_fire(self):
+        for message in self.controller.messages:
+            message.kill()
+            message.owner.showing_text= False
+        
     def show_text(self, message="", duration=None, **kw):
-        message_blob = Blob(message, self, **kw)
-        self.controller.messages.add(message_blob)
-        self.messages.add(message_blob)
-        if duration:
-            self.events.add(Event(duration * FRAME_DELAY, message_blob.kill, None))
+        if not self.showing_text:
+            if not message:
+                message, duration, kw = self.message_queue.pop(0)
+            message_blob = Blob(message, self, **kw)
+            message_blob.owner = self
+            self.controller.messages.add(message_blob)
+            self.current_message = message_blob
+            self.messages.add(message_blob)
+            self.showing_text = True
+            if duration:
+                self.events.add(Event(duration * FRAME_DELAY, message_blob.kill, None))
+                self.events.add(Event(duration * FRAME_DELAY, "showing_text", False))
+        else:
+            self.message_queue.append((message, duration , kw))
+        
 
     def kill(self):
         for message in self.messages:
@@ -837,7 +856,7 @@ class Actor(GameObject):
         Called if this is the main character and the fire key
         (usually <space>) has been pressed.
         """
-        pass
+        super(Actor, self).on_fire()
 
 
 class FallingActor(Actor):
