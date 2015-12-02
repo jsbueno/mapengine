@@ -15,7 +15,9 @@ from pygame.sprite import Sprite, Group
 from .utils import resource_load, pwd, Vector, V
 from .palette import Palette
 from .fonts import FontLoader
+from .cut import Cut
 from .global_states import SCENE_PATH
+from .exceptions import GameOver, CutExit
 
 SIZE = 800, 600
 FRAME_DELAY = 30
@@ -23,7 +25,10 @@ FRAME_DELAY = 30
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=getattr(logging, os.environ.get("LOGLEVEL", "INFO")))
 
-range = xrange
+try:
+    range = xrange
+except NameError:
+    pass
 
 class CDirections(object):
     # TODO: create some simple const type with a nice REPR
@@ -53,19 +58,7 @@ def add_scene_path(path):
     a "scenes/" directory from your working dir. But
     the mechanisms for it may not work that well.
     """
-    self.SCENE_PATH.append(path)
-
-
-class GameOver(Exception):
-    pass
-
-
-class Cut(object):
-    def __init__(self, title, options=()):
-        pass
-
-    def update(self):
-        pass
+    SCENE_PATH.append(path)
 
 
 class Controller(object):
@@ -74,7 +67,6 @@ class Controller(object):
         self.width, self.height = self.size = size
         self.screen = pygame.display.set_mode(size, **kw)
         self.actor_positions = {}
-        self.load_scene(scene)
 
         self.old_top = -20
         self.old_left = -20
@@ -87,6 +79,7 @@ class Controller(object):
         self.diary = {}
         self.inside_cut = False
         self.post_cut_action = None
+        self.load_scene(scene)
 
     def load_scene(self, scene, skip_post_cut=False, skip_pre_cut=False):
         if getattr(self, "scene", None) and self.scene.post_cut and not skip_post_cut:
@@ -148,7 +141,10 @@ class Controller(object):
 
     def update(self):
         if self.inside_cut:
-            return self.draw_cut()
+            try:
+                return self.draw_cut()
+            except CutExit:
+                self.leave_cut()
 
         self.scene.update()
         for actor in self.all_actors:
@@ -315,10 +311,10 @@ class Scene(object):
     actor_plane_sufix _actors
     overlay_plane_sufix _overlay
 
-    """
-
     pre_cut = None
     post_cut = None
+
+    """
 
     def __init__(self, scene_name, **kw):
         # FIXME: allow different extensions, attempt to file-name case sensitiveness
@@ -817,7 +813,6 @@ def simpleloop(scene, size, godmode=False):
             frame_start = pygame.time.get_ticks()
             pygame.event.pump()
             cont.update()
-            cont.draw()
             pygame.display.flip()
             delay = max(0, FRAME_DELAY - (pygame.time.get_ticks() - frame_start))
             pygame.time.delay(delay)

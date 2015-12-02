@@ -25,7 +25,7 @@ def plain_loader(path):
         return file.read()
 
 
-def resource_load(filename, paths=None, cache=None, prefix=None, default=None, force=False, loader=None):
+def resource_load(filename, paths=None, cache=None, prefix=None, default=None, force=False, loader=None, cache_extra=""):
     if loader is None:
         loader = plain_loader
     if paths is None:
@@ -45,7 +45,7 @@ def resource_load(filename, paths=None, cache=None, prefix=None, default=None, f
         if force:
             logger.error("Failed to load image at '{}' as well as path folders: {}. Error found: {}".format(path, paths, exc))
     if cache is not None:
-        cache[path] = resource
+        cache[path + cache_extra] = resource
     return resource
 
 
