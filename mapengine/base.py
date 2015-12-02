@@ -80,19 +80,20 @@ class Controller(object):
         # character and story data that persist across phaes,
         # like lifes, energy, inventory, encounters that happened, etc:
 
+        self.inside_cut = False
         self.diary = {}
         return self.soft_reset()
 
-    def soft_reset(self):
+    def soft_reset(self, raise_=True):
         self.actor_positions = {}
         self.old_top = -20
         self.old_left = -20
         self.old_tiles = {}
         self.dirty_tiles = {}
         self.force_redraw = False
-        self.inside_cut = False
         self.post_cut_action = None
-        raise SoftReset
+        if raise_:
+            raise SoftReset
 
     def load_scene(self, scene, skip_post_cut=False, skip_pre_cut=False):
         if getattr(self, "scene", None) and self.scene.post_cut and not skip_post_cut:
