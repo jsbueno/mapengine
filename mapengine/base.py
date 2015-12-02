@@ -14,6 +14,8 @@ from pygame.sprite import Sprite, Group
 
 from .utils import resource_load, pwd
 from .palette import Palette
+from .fonts import FontLoader
+from .global_states import SCENE_PATH
 
 
 SIZE = 800, 600
@@ -101,9 +103,6 @@ Directions = CDirections()
 
 PAUSE = V((0,0))
 
-SCENE_PATH = [pwd() + '/scenes']
-
-
 def add_scene_path(path):
     """
     Use this to explicitly add a directory to the
@@ -117,6 +116,14 @@ def add_scene_path(path):
 
 class GameOver(Exception):
     pass
+
+
+class Cut(object):
+    def __init__(self, title, options=()):
+        pass
+
+    def update(self):
+        pass
 
 
 class Controller(object):
@@ -136,14 +143,36 @@ class Controller(object):
         # character and story data that persist across phaes,
         # like lifes, energy, inventory, encounters that happened, etc:
         self.diary = {}
+        self.inside_cut = False
+        self.post_cut_action = None
 
-    def load_scene(self, scene):
+    def load_scene(self, scene, skip_post_cut=False, skip_pre_cut=False):
+        if getattr(self, "scene", None) and self.scene.post_cut and not skip_post_cut:
+            self.post_cut_action = partial(self.load_scene, scene, skip_post_cut=True, skip_pre_cut=skip_pre_cut)
+            self.inside_cut = True
+            self.current_cut = self.scene.post_cut(self)
+            return self.update()
         self.scene = scene
         scene.set_controller(self)
         self.all_actors = Group()
         self.actors = {}
         self.load_initial_actors()
         self.messages = Group()
+        if self.scene.pre_cut and not skip_pre_cut:
+            self.post_cut_action = None
+            self.inside_cut = True
+            self.current_cut = self.scene.pre_cut(self)
+            return self.update()
+
+    def leave_cut(self):
+        self.inside_cut = False
+        if self.post_cut_action:
+            action = self.post_cut_action
+            self.post_cut_action = None
+            action()
+
+    def draw_cut(self):
+        self.current_cut.update()
 
     def load_initial_actors(self):
         for x in range(self.scene.width):
@@ -163,6 +192,12 @@ class Controller(object):
         self.main_character = Group()
         self.main_character.add(actor)
 
+    @property
+    def protagonist(self):
+        sprites = self.main_character.sprites()
+
+        return sprites[0] if sprites else None
+
     @staticmethod
     def _touch(actor1, actor2):
         if actor1 is actor2:
@@ -170,6 +205,9 @@ class Controller(object):
         return actor1.rect.colliderect(actor2.rect)
 
     def update(self):
+        if self.inside_cut:
+            return self.draw_cut()
+
         self.scene.update()
         for actor in self.all_actors:
             if actor.off_screen_update or self.is_position_on_screen(actor.pos):
@@ -337,6 +375,8 @@ class Scene(object):
 
     """
 
+    pre_cut = None
+    post_cut = None
 
     def __init__(self, scene_name, **kw):
         # FIXME: allow different extensions, attempt to file-name case sensitiveness
@@ -522,22 +562,6 @@ class Event(object):
         return hash(self.attribute)
 
 TEXT_WIDTH = 20
-
-class FontLoader(object):
-    font_cache = {}
-
-    font_prefix = "fonts/"
-    def __init__(self, font_file_name="sans.ttf", size=16, bold=True, **kw):
-        self.size = size
-        paths = [os.path.join(path.rstrip("/").rsplit("/",1)[0], self.font_prefix) for path in SCENE_PATH]
-        self.font = resource_load(font_file_name, paths=paths, cache=self.font_cache, loader=self.loader)
-        self.font.set_bold(bold)
-        self.color = kw.get("color", (255,255,255))
-        self.antialias = kw.get("antialias", True)
-
-    def loader(self, path):
-        return pygame.font.Font(path, self.size)
-
 
 class Blob(Sprite, FontLoader):
     """
@@ -859,7 +883,7 @@ def simpleloop(scene, size, godmode=False):
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
                 raise GameOver
-            main_character = (cont.main_character.sprites()[0]) if not godmode else None
+            main_character = (cont.protagonist) if not godmode else None
             for direction_name in "RIGHT LEFT UP DOWN".split():
                 if keys[getattr(pygame, "K_" + direction_name)]:
                     direction = getattr(Directions, direction_name)

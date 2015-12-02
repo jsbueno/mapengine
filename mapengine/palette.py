@@ -1,6 +1,4 @@
 # coding: utf-8
-
-
 from pygame.color import Color
 
 class Palette(object):
