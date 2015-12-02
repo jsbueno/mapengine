@@ -7,7 +7,8 @@ from .fonts import FontLoader
 import pygame
 from pygame.locals import *
 
-delay = 350
+FRAME_DELAY= 30
+
 class Cut(object):
     title_font = "sans.ttf", 64
     option_font = "sans.ttf", 32
@@ -64,6 +65,7 @@ class Cut(object):
             screen.blit(r_option, (offset_x, offset_y))
         pygame.display.flip()
 
+
         pygame.event.pump()
         keys = pygame.key.get_pressed()
         if not self.options and (keys[K_SPACE] or keys[K_RETURN] or keys[K_ESCAPE]):
@@ -80,3 +82,4 @@ class Cut(object):
                 pygame.time.delay(350)
                 break
 
+        pygame.time.delay(FRAME_DELAY)
