@@ -809,6 +809,9 @@ class Actor(GameObject):
             return
         self.old_pos = self.pos
         new_pos = self.pos + direction
+        scene = self.controller.scene
+        if new_pos.x < 0 or new_pos.x > scene.width or new_pos.y < 0 or new_pos.y > scene.height:
+            return
         self.move_direction = direction
         self.move_direction_count = self.tick
         self.speed = 1.0 / self.base_move_rate 
