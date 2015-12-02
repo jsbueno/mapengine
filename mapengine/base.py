@@ -12,11 +12,10 @@ import pygame
 from pygame.color import Color
 from pygame.sprite import Sprite, Group
 
-from .utils import resource_load, pwd
+from .utils import resource_load, pwd, Vector, V
 from .palette import Palette
 from .fonts import FontLoader
 from .global_states import SCENE_PATH
-
 
 SIZE = 800, 600
 FRAME_DELAY = 30
@@ -25,63 +24,6 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=getattr(logging, os.environ.get("LOGLEVEL", "INFO")))
 
 range = xrange
-
-class Vector(object):
-    __slots__ = ["x", "y"]
-
-    def __init__(self, pos):
-        self.x = pos[0]
-        self.y = pos[1]
-
-    def __len__(self):
-        return 2
-
-    def __getitem__(self, index):
-        if index==0:
-            return self.x
-        if index==1:
-            return self.y
-        raise IndexError
-
-    def __setitem__(self, index, value):
-        if index == 0:
-            self.x = value
-        elif index == 1:
-            self.y == value
-        else:
-            raise IndexError
-
-    def __eq__(self, other):
-        return self.x == other[0] and self.y == other[1]
-
-    def __add__(self, other):
-        return Vector((self.x + other[0], self.y + other[1]))
-
-    def __radd__(self, other):
-        return Vector((self.x + other[0], self.y + other[1]))
-
-    def __sub__(self, other):
-        return Vector((self.x - other[0], self.y - other[1]))
-
-    def __mul__(self, other):
-        return Vector((self.x * other, self.y * other))
-
-    def __div__(self, other):
-        return Vector((self.x // other, self.y // other))
-
-    def __truediv__(self, other):
-        return Vector((self.x / float(other), self.y / float(other)))
-
-    def distance(self, other):
-        return ((self.x - other[0]) ** 2, (self.y - other[1]) ** 2) ** 0.5
-
-    def __repr__(self):
-        return "Vector(({:g},{:g}))".format(self.x, self.y)
-
-    def __hash__(self):
-        return hash((self.x, self.y))
-
-V=Vector
 
 class CDirections(object):
     # TODO: create some simple const type with a nice REPR

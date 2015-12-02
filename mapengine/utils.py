@@ -47,3 +47,61 @@ def resource_load(filename, paths=None, cache=None, prefix=None, default=None, f
     if cache is not None:
         cache[path] = resource
     return resource
+
+
+class Vector(object):
+    __slots__ = ["x", "y"]
+
+    def __init__(self, pos):
+        self.x = pos[0]
+        self.y = pos[1]
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, index):
+        if index==0:
+            return self.x
+        if index==1:
+            return self.y
+        raise IndexError
+
+    def __setitem__(self, index, value):
+        if index == 0:
+            self.x = value
+        elif index == 1:
+            self.y == value
+        else:
+            raise IndexError
+
+    def __eq__(self, other):
+        return self.x == other[0] and self.y == other[1]
+
+    def __add__(self, other):
+        return Vector((self.x + other[0], self.y + other[1]))
+
+    def __radd__(self, other):
+        return Vector((self.x + other[0], self.y + other[1]))
+
+    def __sub__(self, other):
+        return Vector((self.x - other[0], self.y - other[1]))
+
+    def __mul__(self, other):
+        return Vector((self.x * other, self.y * other))
+
+    def __div__(self, other):
+        return Vector((self.x // other, self.y // other))
+
+    def __truediv__(self, other):
+        return Vector((self.x / float(other), self.y / float(other)))
+
+    def distance(self, other):
+        return ((self.x - other[0]) ** 2, (self.y - other[1]) ** 2) ** 0.5
+
+    def __repr__(self):
+        return "Vector(({:g},{:g}))".format(self.x, self.y)
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+V = Vector
