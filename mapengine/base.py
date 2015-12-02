@@ -311,8 +311,8 @@ class Scene(object):
     actor_plane_sufix _actors
     overlay_plane_sufix _overlay
 
-    pre_cut = None
-    post_cut = None
+    pre_cut None
+    post_cut None
 
     """
 
