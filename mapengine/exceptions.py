@@ -11,3 +11,9 @@ class RestartGame(BaseGameException):
 
 class CutExit(BaseGameException):
     pass
+
+class Reset(BaseGameException):
+    pass
+
+class SoftReset(Reset):
+    pass

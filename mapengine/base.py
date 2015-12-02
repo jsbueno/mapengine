@@ -18,10 +18,11 @@ from .palette import Palette
 from .fonts import FontLoader
 from .cut import Cut
 from .global_states import SCENE_PATH
-from .exceptions import GameOver, CutExit, RestartGame
+from .exceptions import GameOver, CutExit, RestartGame, SoftReset, Reset
 
 SIZE = 800, 600
 FRAME_DELAY = 30
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=getattr(logging, os.environ.get("LOGLEVEL", "INFO")))
@@ -68,7 +69,10 @@ class Controller(object):
         self.width, self.height = self.size = size
         self.screen = pygame.display.set_mode(size, **kw)
 
-        self.hard_reset()
+        try:
+            self.hard_reset()
+        except Reset:
+            pass
         self.load_scene(scene)
 
     def hard_reset(self):
@@ -88,6 +92,7 @@ class Controller(object):
         self.force_redraw = False
         self.inside_cut = False
         self.post_cut_action = None
+        raise SoftReset
 
     def load_scene(self, scene, skip_post_cut=False, skip_pre_cut=False):
         if getattr(self, "scene", None) and self.scene.post_cut and not skip_post_cut:
@@ -155,16 +160,18 @@ class Controller(object):
                 return self.draw_cut()
             except CutExit:
                 self.leave_cut()
-
-        self.scene.update()
-        for actor in self.all_actors:
-            if actor.off_screen_update or self.is_position_on_screen(actor.pos):
-                actor.update()
-            for collision in pygame.sprite.spritecollide(actor, self.all_actors, False, collided=self._touch):
-                actor.on_over(collision)
-            if isinstance(self.scene[actor.pos], GameObject):
-                self.scene[actor.pos].on_over(actor)
-        self.draw()
+        try:
+            self.scene.update()
+            for actor in self.all_actors:
+                if actor.off_screen_update or self.is_position_on_screen(actor.pos):
+                    actor.update()
+                for collision in pygame.sprite.spritecollide(actor, self.all_actors, False, collided=self._touch):
+                    actor.on_over(collision)
+                if isinstance(self.scene[actor.pos], GameObject):
+                    self.scene[actor.pos].on_over(actor)
+            self.draw()
+        except SoftReset:
+            pass
 
 
     def draw(self):
