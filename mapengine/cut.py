@@ -12,9 +12,10 @@ class Cut(object):
     title_font = "sans.ttf", 64
     option_font = "sans.ttf", 32
     controller = None
-    def __init__(self, title, options=(), **kw):
+    def __init__(self, title, options=(), exit=None, **kw):
         self.title = title
         self.options = options
+        self.exit = exit
         # each option is a tuple with the text to be displayed
         # and a callable action to be taken when it is selected.
         # (the callable action is passed the controller as the sole parameter,
@@ -64,7 +65,10 @@ class Cut(object):
         pygame.event.pump()
         keys = pygame.key.get_pressed()
         if not self.options and (keys[K_SPACE] or keys[K_RETURN] or keys[K_ESCAPE]):
-            raise CutExit
+            if self.exit:
+                self.exit(self.controller)
+            else:
+                raise CutExit
         for i, option in enumerate(self.options, 1):
             # <esc> also triggers the first option
             if keys[str(i)] or keys[K_ESCAPE]:

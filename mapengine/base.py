@@ -1,6 +1,7 @@
 # coding: utf-8
 
 from copy import copy
+from functools import partial
 import logging
 import os
 import random
@@ -83,10 +84,9 @@ class Controller(object):
 
     def load_scene(self, scene, skip_post_cut=False, skip_pre_cut=False):
         if getattr(self, "scene", None) and self.scene.post_cut and not skip_post_cut:
-            self.post_cut_action = partial(self.load_scene, scene, skip_post_cut=True, skip_pre_cut=skip_pre_cut)
-            self.inside_cut = True
-            self.current_cut = self.scene.post_cut(self)
-            return self.update()
+            post_cut_action = partial(self.load_scene, scene, skip_post_cut=True, skip_pre_cut=skip_pre_cut)
+            return self.enter_cut(self.scene.post_cut, post_cut_action)
+
         self.scene = scene
         scene.set_controller(self)
         self.all_actors = Group()
@@ -94,10 +94,13 @@ class Controller(object):
         self.load_initial_actors()
         self.messages = Group()
         if self.scene.pre_cut and not skip_pre_cut:
-            self.post_cut_action = None
-            self.inside_cut = True
-            self.current_cut = self.scene.pre_cut(self)
-            return self.update()
+            return self.enter_cut(self.scene.pre_cut)
+
+    def enter_cut(self, cut, post_action=None):
+        self.post_cut_action = post_action
+        self.inside_cut = True
+        self.current_cut = cut(self)
+        return self.update()
 
     def leave_cut(self):
         self.inside_cut = False
@@ -314,6 +317,8 @@ class Scene(object):
     pre_cut None
     post_cut None
 
+
+    game_over_cut None
     """
 
     def __init__(self, scene_name, **kw):
@@ -334,8 +339,20 @@ class Scene(object):
             value = value.split("#")[0].strip()
             self.load_attr(attr, value, kw)
 
+        if self.game_over_cut is None:
+            self.game_over_cut = Cut("Game Over", options=[
+                ("Start new game", self.default_game_over_continue),
+                ("Exit", self.default_game_over_exit),
+            ])
         SCENE_PATH.append(os.path.join(pwd(2), self.scene_path_prefix))
 
+    @staticmethod
+    def default_game_over_exit(controller):
+        raise GameOver
+
+    @staticmethod
+    def default_game_over_continue(controller):
+        raise CutExit
 
     def set_controller(self, controller):
         # Called when scene is first passed to a controller object
@@ -807,36 +824,43 @@ class FallingActor(Actor):
 
 
 def simpleloop(scene, size, godmode=False):
-    cont = Controller(size, scene)
+    controller = Controller(size, scene)
+
     try:
-        while True:
-            frame_start = pygame.time.get_ticks()
-            pygame.event.pump()
-            cont.update()
-            pygame.display.flip()
-            delay = max(0, FRAME_DELAY - (pygame.time.get_ticks() - frame_start))
-            pygame.time.delay(delay)
+        controller = Controller(size, scene)
+        continue_ = True
+        while continue_:
+            try:
+                while True:
+                    frame_start = pygame.time.get_ticks()
+                    pygame.event.pump()
+                    controller.update()
+                    pygame.display.flip()
+                    delay = max(0, FRAME_DELAY - (pygame.time.get_ticks() - frame_start))
+                    pygame.time.delay(delay)
 
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_ESCAPE]:
-                raise GameOver
-            main_character = (cont.protagonist) if not godmode else None
-            for direction_name in "RIGHT LEFT UP DOWN".split():
-                if keys[getattr(pygame, "K_" + direction_name)]:
-                    direction = getattr(Directions, direction_name)
-                    if godmode:
-                        scene.move(direction)
-                    else:
-                        main_character.move(direction)
-                if keys[pygame.K_SPACE] and not godmode:
-                    main_character.on_fire()
+                    keys = pygame.key.get_pressed()
+                    if keys[pygame.K_ESCAPE]:
+                        raise GameOver
+                    main_character = (controller.protagonist) if not godmode else None
+                    for direction_name in "RIGHT LEFT UP DOWN".split():
+                        if keys[getattr(pygame, "K_" + direction_name)]:
+                            direction = getattr(Directions, direction_name)
+                            if godmode:
+                                scene.move(direction)
+                            else:
+                                main_character.move(direction)
+                        if keys[pygame.K_SPACE] and not godmode:
+                            main_character.on_fire()
 
 
-    except GameOver:
-        # cont.scene = EndGameScene()
-        pass
+            except GameOver:
+                continue_ = False
+            except CutExit:
+                controller.load_scene(scene)
+
     finally:
-        cont.quit()
+        controller.quit()
 
 class MainActor(Actor):
     # This attributes defines for the controller the character around which the
@@ -858,6 +882,10 @@ class MainActor(Actor):
             self.controller.scene.target_top = self.pos[1] - self.margin
         elif (self.pos[1] > self.controller.scene.top + self.controller.blocks_y - self.margin - 1):
             self.controller.scene.target_top = self.pos[1] - self.controller.blocks_y + self.margin + 1
+
+    def kill(self):
+        super(MainActor, self).kill()
+        self.controller.enter_cut(self.controller.scene.game_over_cut)
 
 ####
 # From here on, it should be only example and testing code -
@@ -894,6 +922,8 @@ class Animal0(Actor):
 
     def on_over(self, other):
         if isinstance(other, Hero):
+            other.kill()
+            return
             other.blinking = True
             other.strength = 6
             other.events.add(Event(5 * FRAME_DELAY, "blinking", False))
