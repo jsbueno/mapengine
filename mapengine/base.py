@@ -889,7 +889,10 @@ def simpleloop(scene, size, godmode=False):
             except RestartGame:
                 scene.top = scene.left = 0
                 controller.load_scene(scene)
-                controller.hard_reset()
+                try:
+                    controller.hard_reset()
+                except Reset:
+                    pass
 
     finally:
         controller.quit()
