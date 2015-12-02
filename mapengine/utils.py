@@ -2,6 +2,9 @@
 
 import logging
 import os, sys
+
+from .exceptions import BaseGameException
+
 logger = logging.getLogger(__name__)
 
 def pwd(back=1):
@@ -30,6 +33,7 @@ def resource_load(filename, paths=None, cache=None, prefix=None, default=None, f
         loader = plain_loader
     if paths is None:
         paths = ["."]
+    path_not_found = False
     for directory in reversed(paths):
         path = os.path.join(directory, filename)
         if cache and path in cache and not force:
@@ -37,13 +41,17 @@ def resource_load(filename, paths=None, cache=None, prefix=None, default=None, f
             return cache[path]
         if os.path.exists(path):
             break
+    else:
+        path_not_found = True
     try:
+        if path_not_found:
+            raise BaseGameException("Resource path not found - {} at {} ".format(filename, paths))
         logger.debug("Loading resource at '{}'".format(path))
         resource = loader(path)
     except Exception as exc:
         resource = default
         if force:
-            logger.error("Failed to load image at '{}' as well as path folders: {}. Error found: {}".format(path, paths, exc))
+            logger.error("Failed to load resource at '{}' as well as path folders: {}. Error found: {}".format(path, paths, exc))
     if cache is not None:
         cache[path + cache_extra] = resource
     return resource

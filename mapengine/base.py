@@ -325,6 +325,7 @@ class Scene(object):
 
 
     game_over_cut None
+    music None
     """
 
     def __init__(self, scene_name, **kw):
@@ -344,6 +345,9 @@ class Scene(object):
             attr, value = line.split(None, 1)
             value = value.split("#")[0].strip()
             self.load_attr(attr, value, kw)
+
+        if self.music is None:
+            self.music = scene_name + ".ogg"
 
         if self.game_over_cut is None:
             self.game_over_cut = Cut("Game Over", options=[
@@ -370,6 +374,8 @@ class Scene(object):
         self.background_plane = {}
 
         self.scroll_count = 0
+        self.music_load(self.music)
+        self.start_music()
 
     def load_attr(self, attrname, default, kw):
         if isinstance(default, str):
@@ -387,6 +393,14 @@ class Scene(object):
         if not filename.lower().endswith((".png", ".bmp", ".tif", ".tiff")):
             filename += sufix + ".png"
         return resource_load(filename, paths=SCENE_PATH, cache=self.cached_images, loader=pygame.image.load, **kw)
+
+    def start_music(self):
+        if getattr(self, "music_path", None):
+            self.playing = pygame.mixer.music.load(self.music_path)
+            pygame.mixer.music.play(-1)
+
+    def music_load(self, filename):
+        resource_load(filename, paths=SCENE_PATH, loader=lambda path: setattr(self, "music_path", path))
 
     def load(self):
         self.image = self.image_load(force=True)
