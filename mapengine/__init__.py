@@ -11,3 +11,4 @@ from .base import Vector
 from .cut import Cut
 from .palette import Palette
 
+__version__ = "0.3.0"

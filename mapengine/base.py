@@ -617,8 +617,7 @@ class Blob(Sprite, FontLoader):
         super(Blob, self).kill()
 
 
-class GameObject(Sprite):
-    __metaclass__ = GameObjectRegistry
+class GameObject(Sprite, metaclass=GameObjectRegistry):
 
     hardness = 0
     background_image = None
